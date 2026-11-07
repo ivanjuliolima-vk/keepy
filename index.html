@@ -1826,6 +1826,12 @@ function bannerFechado(k){
   const podeReabrir = state.admin && k===fechadoAte();
   return `<div class="banner fechado"><span>🔒 <b>${cap1(nomeMes(k))} está fechado.</b> ${state.cfg.backupEmail? (enviado? "Relatório enviado por e-mail." : "Relatório aguardando envio por e-mail.") : "Não aceita novos lançamentos nem mudanças."}</span>${podeReabrir? `<button class="btn sm" data-reabrir="1">Reabrir</button>` : ""}</div>`;
 }
+// Mesmos números do topo de Lançamentos: entradas, gastos (com as faturas do mês) e o que sobrou no caixa.
+function resumoMes(k){
+  const mes=doMes(k);
+  const rec=somar(mes,"receita",i=>!isInv(i)), des=somar(mes,"despesa",i=>!isInv(i)&&!isCredito(i))+faturasDoMes(k).reduce((a,x)=>a+x.valor,0), invL=mes.filter(isInv).reduce((a,i)=>a+sinalRes(i),0);
+  return {entradas:fmt(rec), gastos:fmt(des), saldo:fmt(rec-des-invL)};
+}
 let enviando=false;
 async function enviarPendentes(){
   if(!state.cfg.backupEmail || state.readOnly || enviando || !fechadoAte()) return;
@@ -1836,7 +1842,7 @@ async function enviarPendentes(){
     while(k && k<=fechadoAte()){
       if(state.items.some(i=>ym(i.vencimento)===k)){
         const pdf=await blobB64(await gerarPDF(k,k));
-        const {data, error} = await sb.functions.invoke("enviar-relatorio", {body:{titulo:tituloBackup(k), periodo:nomeMes(k), pdf}});
+        const {data, error} = await sb.functions.invoke("enviar-relatorio", {body:{titulo:tituloBackup(k), periodo:nomeMes(k), pdf, nome:nomeExibido(), resumo:resumoMes(k)}});
         if(error){ let det={}; try{ det=await error.context.json(); }catch(_){ } throw {code: det.erro||"envio"}; }
         feitos.push(k);
       }
