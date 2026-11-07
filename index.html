@@ -263,6 +263,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2.5px soli
 .accard b{font-size:15px}.accard small{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .accard .actions{margin-top:4px}
 .acsenha{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+.relrow{display:flex;align-items:center;justify-content:space-between;gap:10px}.relrow .btn{flex:none}
 .banner.fechar{border-color:var(--accent);background:var(--accent-soft)}
 .banner.fechado{background:var(--sunk)}
 .banner .btn{flex:none}
@@ -401,7 +402,7 @@ function corteRet(ret){
 // Com backup no Drive ligado, só apaga meses que já foram salvos (cfg.backupAte = "AAAA-MM").
 function corteEfetivo(ret){
   const c=corteRet(ret);
-  if(!state.cfg.backupDrive && !state.cfg.backupEmail) return c;
+  /* todos: só apaga meses fechados com relatório gerado */
   const b=state.cfg.backupAte; if(!/^\d{4}-\d{2}$/.test(b||"")) return "0000-01-01";
   const lim=addMonths(b,1)+"-01"; return lim<c? lim : c;
 }
@@ -598,7 +599,7 @@ function viewConfig(){
   <div class="seg ${state.admin?"seg5":"seg4"}" role="tablist">${st("usuario","Usuário")}${st("categorias","Categorias")}${st("meios","Pagamentos")}${state.admin? st("acessos","Acessos") : ""}${st("sair","Sair")}</div>
   ${sub==="categorias"? cfgCats() : sub==="meios"? cfgMeios() : sub==="sair"? cfgSair() : sub==="acessos"&&state.admin? cfgAcessos() : cfgUsuario()}`;
 }
-function retInfoTxt(k){ const n=antigos(k).length; return `Apaga lançamentos com data anterior a <b>${dataBR(corteRet(k))}</b>${state.cfg.backupEmail?`, só depois de fechados e enviados por e-mail${state.cfg.backupAte?` (enviado até ${nomeMes(state.cfg.backupAte)})`:" (nenhum mês enviado ainda)"}`:""}. ${n? `Hoje isso apagaria <b>${n} ${n===1?"lançamento":"lançamentos"}</b>.` : "Hoje nada seria apagado."}`; }
+function retInfoTxt(k){ const n=antigos(k).length; return `Apaga lançamentos com data anterior a <b>${dataBR(corteRet(k))}</b>, só depois de fechados e com o relatório gerado${state.cfg.backupAte?` (até ${nomeMes(state.cfg.backupAte)})`:" (nenhum mês fechado ainda)"}. ${n? `Hoje isso apagaria <b>${n} ${n===1?"lançamento":"lançamentos"}</b>.` : "Hoje nada seria apagado."}`; }
 function retBtnTxt(k){ const n=antigos(k).length; return k===retAtual()? "Salvo" : n? `Salvar e apagar ${n} ${n===1?"lançamento":"lançamentos"}` : "Salvar"; }
 function cfgUsuario(){
   const me=state.me||{};
@@ -690,6 +691,25 @@ async function carregarAcessos(){
   state.acCarregando=false; state.acErro = r.erro? "Não foi possível carregar os acessos agora." : ""; if(!r.erro) state.acessos=r.usuarios||[];
   if(state.tab==="config" && state.cfgTab==="acessos") render();
 }
+async function abrirRelatorios(id){
+  if(state.acRelId===id){ state.acRelId=null; render(); return; }
+  state.acRelId=id; state.acRels=null; state.acSenhaId=null; render();
+  const {data, error} = await sb.storage.from("relatorios").list(id, {limit:200, sortBy:{column:"name", order:"desc"}});
+  if(state.acRelId!==id) return;
+  state.acRels = error? [] : (data||[]).filter(f=>/^\d{4}-\d{2}\.pdf$/.test(f.name)).map(f=>({k:f.name.slice(0,7)}));
+  render();
+}
+async function baixarRelatorio(btn){
+  const [id,k]=btn.dataset.acpdf.split("|"), u=(state.acessos||[]).find(x=>x.id===id);
+  btn.disabled=true; const t=btn.textContent; btn.textContent="Abrindo…";
+  try{
+    const {data, error} = await sb.storage.from("relatorios").download(`${id}/${k}.pdf`);
+    if(error||!data) throw 0;
+    const nm=cap1(nomeMes(k)), quem=(u&&(u.nome||u.email.split("@")[0]))||"";
+    await salvarArquivo(`Keepy – ${quem? quem+" – " : ""}${nm}.pdf`, new Blob([data],{type:"application/pdf"}));
+  }catch(e){ if(!(e&&e.code==="declined")) toast("Não foi possível abrir o relatório agora."); }
+  btn.disabled=false; btn.textContent=t;
+}
 async function removerAcesso(btn){
   const id=btn.dataset.acrem, u=(state.acessos||[]).find(x=>x.id===id); if(!u) return;
   if(!btn.dataset.armed){ btn.dataset.armed="1"; btn.classList.add("armed"); btn.textContent="Confirmar: remover e apagar dados"; return; }
@@ -704,7 +724,8 @@ function cfgAcessos(){
   const card=u=>`<div class="accard">
     <div class="achead"><div><b>${esc(u.nome||u.email.split("@")[0])}</b>${u.voce?` <span class="pill ok">Você</span>`:""}${u.admin&&!u.voce?` <span class="pill ok">Administrador</span>`:""}<small>${esc(u.email)}</small></div></div>
     <small class="muted">${u.pendente? "Aguardando o primeiro acesso" : u.ultimoAcesso? `Último acesso em ${dt(u.ultimoAcesso)}` : "Ainda não entrou"} · ${u.lancamentos} ${u.lancamentos===1?"lançamento":"lançamentos"} · desde ${dt(u.criadoEm)}</small>
-    ${u.voce? "" : `<div class="actions"><button type="button" class="btn sm" data-acsenha="${u.id}">${state.acSenhaId===u.id?"Cancelar":"Redefinir senha"}</button>${u.admin? "" : `<button type="button" class="btn sm danger" data-acrem="${u.id}">Remover acesso</button>`}</div>`}
+    ${u.voce? "" : `<div class="actions"><button type="button" class="btn sm" data-acrel="${u.id}" aria-expanded="${state.acRelId===u.id}">${state.acRelId===u.id?"Esconder relatórios":"Relatórios"}</button><button type="button" class="btn sm" data-acsenha="${u.id}">${state.acSenhaId===u.id?"Cancelar":"Redefinir senha"}</button>${u.admin? "" : `<button type="button" class="btn sm danger" data-acrem="${u.id}">Remover acesso</button>`}</div>`}
+    ${state.acRelId===u.id? `<div class="acsenha">${!state.acRels? `<small class="muted">Carregando…</small>` : !state.acRels.length? `<small class="muted">Nenhum mês fechado ainda.</small>` : state.acRels.map(r=>`<div class="relrow"><span>${esc(cap1(nomeMes(r.k)))}</span><button type="button" class="btn sm" data-acpdf="${u.id}|${r.k}">Abrir PDF</button></div>`).join("")}</div>` : ""}
     ${state.acSenhaId===u.id? `<form id="frmAcSenha" data-id="${u.id}" novalidate class="acsenha">
       <div class="field"><label for="asSenha">Nova senha provisória</label><input id="asSenha" autocomplete="off" autocapitalize="none" placeholder="Mínimo 6 caracteres"></div>
       <div class="err" id="asErr" hidden></div>
@@ -1785,11 +1806,10 @@ const fechadoAte = () => /^\d{4}-\d{2}$/.test(state.cfg.fechadoAte||"")? state.c
 const mesFechado = k => !!fechadoAte() && k<=fechadoAte();
 const itemFechado = i => !!i && !!i.vencimento && mesFechado(ym(i.vencimento));
 const tituloBackup = k => { const nm=nomeMes(k); return `Keepy – ${nm.charAt(0).toUpperCase()+nm.slice(1)}.pdf`; };
-const msgFechado = k => `${cap1(nomeMes(k))} está fechado. ${state.admin? "Reabra o mês em Lançamentos para alterar." : "Só o administrador pode reabrir."}`;
+const msgFechado = k => `${cap1(nomeMes(k))} está fechado. ${k===fechadoAte()? "Reabra o mês em Lançamentos para alterar." : "Só o último mês fechado pode ser reaberto."}`;
 const cap1 = t => t.charAt(0).toUpperCase()+t.slice(1);
 // Próximo mês que já terminou e ainda não foi fechado (o mais antigo primeiro).
 function proximoAFechar(){
-  if(!state.admin) return null;
   const ultimo=addMonths(ym(todayStr()),-1);
   const meses=[...new Set(state.items.map(i=>ym(i.vencimento)))].sort();
   const k = meses.find(m=>(!fechadoAte() || m>fechadoAte()));
@@ -1818,13 +1838,13 @@ async function reabrirMes(btn){
 function bannerFechar(k, ondeLanc){
   if(!k) return "";
   const mes=nomeMes(k).split(" de ")[0];
-  return `<div class="banner fechar"><span><b>${cap1(mes)} terminou.</b> Confira os lançamentos e feche o mês. Depois de fechado, ninguém mais altera ${mes}${state.cfg.backupEmail?` e o relatório em PDF vai para ${esc(state.me&&state.me.email||"o seu e-mail")}`:""}.</span>${ondeLanc||state.month===k? "" : `<button class="btn sm" data-vermes="${k}">Ver ${mes}</button>`}<button class="btn primary sm" data-fecharmes="${k}">Fechar ${mes}</button></div>`;
+  return `<div class="banner fechar"><span><b>${cap1(mes)} terminou.</b> Confira os lançamentos e feche o mês. Depois de fechado, ninguém mais altera ${mes}${state.cfg.backupEmail?` e o relatório em PDF vai para ${esc(state.me&&state.me.email||"o seu e-mail")}`:" e o relatório em PDF fica guardado"}.</span>${ondeLanc||state.month===k? "" : `<button class="btn sm" data-vermes="${k}">Ver ${mes}</button>`}<button class="btn primary sm" data-fecharmes="${k}">Fechar ${mes}</button></div>`;
 }
 function bannerFechado(k){
   if(!mesFechado(k)) return "";
   const enviado = state.cfg.backupAte && k<=state.cfg.backupAte;
-  const podeReabrir = state.admin && k===fechadoAte();
-  return `<div class="banner fechado"><span>🔒 <b>${cap1(nomeMes(k))} está fechado.</b> ${state.cfg.backupEmail? (enviado? "Relatório enviado por e-mail." : "Relatório aguardando envio por e-mail.") : "Não aceita novos lançamentos nem mudanças."}</span>${podeReabrir? `<button class="btn sm" data-reabrir="1">Reabrir</button>` : ""}</div>`;
+  const podeReabrir = k===fechadoAte();
+  return `<div class="banner fechado"><span>🔒 <b>${cap1(nomeMes(k))} está fechado.</b> ${state.cfg.backupEmail? (enviado? "Relatório enviado por e-mail." : "Relatório aguardando envio por e-mail.") : (enviado? "Relatório guardado." : "Guardando o relatório…")}</span>${podeReabrir? `<button class="btn sm" data-reabrir="1">Reabrir</button>` : ""}</div>`;
 }
 // Mesmos números do topo de Lançamentos: entradas, gastos (com as faturas do mês) e o que sobrou no caixa.
 function resumoMes(k){
@@ -1834,16 +1854,24 @@ function resumoMes(k){
 }
 let enviando=false;
 async function enviarPendentes(){
-  if(!state.cfg.backupEmail || state.readOnly || enviando || !fechadoAte()) return;
+  if(state.readOnly || enviando || !fechadoAte()) return;
+  const porEmail=!!state.cfg.backupEmail;
   enviando=true; const feitos=[];
   try{
     const meses=[...new Set(state.items.map(i=>ym(i.vencimento)))].sort();
     let k = /^\d{4}-\d{2}$/.test(state.cfg.backupAte||"")? addMonths(state.cfg.backupAte,1) : meses[0];
     while(k && k<=fechadoAte()){
       if(state.items.some(i=>ym(i.vencimento)===k)){
-        const pdf=await blobB64(await gerarPDF(k,k));
-        const {data, error} = await sb.functions.invoke("enviar-relatorio", {body:{titulo:tituloBackup(k), periodo:nomeMes(k), pdf, nome:nomeExibido(), resumo:resumoMes(k)}});
-        if(error){ let det={}; try{ det=await error.context.json(); }catch(_){ } throw {code: det.erro||"envio"}; }
+        const blob=await gerarPDF(k,k);
+        if(porEmail){
+          const pdf=await blobB64(blob);
+          const {data, error} = await sb.functions.invoke("enviar-relatorio", {body:{titulo:tituloBackup(k), periodo:nomeMes(k), pdf, nome:nomeExibido(), resumo:resumoMes(k)}});
+          if(error){ let det={}; try{ det=await error.context.json(); }catch(_){ } throw {code: det.erro||"envio"}; }
+        } else {
+          // Guarda no Keepy; o administrador vê na aba Acessos.
+          const {error} = await sb.storage.from("relatorios").upload(`${state.uid}/${k}.pdf`, blob, {upsert:true, contentType:"application/pdf"});
+          if(error) throw {code:"guardar"};
+        }
         feitos.push(k);
       }
       await salvarCfg({backupAte:k});
@@ -1851,10 +1879,10 @@ async function enviarPendentes(){
     }
   }catch(e){
     const c=e&&e.code;
-    toast(c==="sem_chave"? "O envio de e-mail ainda não está configurado. O relatório fica guardado para enviar depois." : "Não consegui enviar o relatório por e-mail agora. Tento de novo na próxima vez que você abrir.");
+    toast(c==="sem_chave"? "O envio de e-mail ainda não está configurado. O relatório fica guardado para enviar depois." : porEmail? "Não consegui enviar o relatório por e-mail agora. Tento de novo na próxima vez que você abrir." : "Não consegui guardar o relatório agora. Tento de novo na próxima vez que você abrir.");
   }
   enviando=false;
-  if(feitos.length){ toast(feitos.length===1? `Relatório de ${nomeMes(feitos[0])} enviado para o seu e-mail` : `${feitos.length} relatórios enviados para o seu e-mail`); render(); limpezaFeita=false; limpezaAutomatica(); }
+  if(feitos.length){ toast(porEmail? (feitos.length===1? `Relatório de ${nomeMes(feitos[0])} enviado para o seu e-mail` : `${feitos.length} relatórios enviados para o seu e-mail`) : (feitos.length===1? `Relatório de ${nomeMes(feitos[0])} guardado` : `${feitos.length} relatórios guardados`)); render(); limpezaFeita=false; limpezaAutomatica(); }
 }
 const blobB64 = b => new Promise((ok,falha)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(",")[1]); r.onerror=falha; r.readAsDataURL(b); });
 
@@ -1976,6 +2004,8 @@ $("main").addEventListener("click",async e=>{
   if(e.target.closest("#acNovoBtn")){ state.acNovo=!state.acNovo; state.acOk=""; render(); return; }
   const acs=e.target.closest("[data-acsenha]"); if(acs){ state.acSenhaId = state.acSenhaId===acs.dataset.acsenha? null : acs.dataset.acsenha; state.acOk=""; render(); const i=$("asSenha"); if(i) i.focus(); return; }
   const acr=e.target.closest("[data-acrem]"); if(acr){ removerAcesso(acr); return; }
+  const arl=e.target.closest("[data-acrel]"); if(arl){ abrirRelatorios(arl.dataset.acrel); return; }
+  const apf=e.target.closest("[data-acpdf]"); if(apf){ baixarRelatorio(apf); return; }
   if(await meiosClick(e)) return;
   const ct=e.target.closest("[data-cattipo]"); if(ct){ state.catTipo=ct.dataset.cattipo; state.editCat=null; render(); return; }
   const ce=e.target.closest("[data-catedit]"); if(ce){ state.editCat=ce.dataset.catedit; render(); setTimeout(()=>{ const el=$("fCatNome"); if(el) el.focus(); },30); return; }
