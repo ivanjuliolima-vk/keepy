@@ -2019,6 +2019,8 @@ async function importarBackup(file){
     const lista=j.docs.filter(x=>x && (x.colecao==="lanc"||x.colecao==="cfg") && typeof x.id==="string" && x.data && typeof x.data==="object");
     if(!lista.length) throw 0;
     const f=fechadoAte(); if(f && lista.some(x=>x.colecao==="lanc" && x.data.vencimento && x.data.vencimento.slice(0,7)<=f)){ er.textContent="O arquivo tem lançamentos de meses já fechados. Reabra esses meses antes de trazer os dados."; er.hidden=false; return; }
+    // Mantém as travas de fechamento e envio já existentes na versão nova.
+    lista.forEach(x=>{ if(x.colecao==="cfg" && x.id==="geral"){ const {fechadoAte,backupAte,backupEmail}=state.cfg; x.data={...x.data}; ["fechadoAte","backupAte","backupEmail"].forEach(k=>delete x.data[k]); Object.assign(x.data, JSON.parse(JSON.stringify({fechadoAte,backupAte,backupEmail}))); } });
     await state.db.importar(lista);
     const n=lista.filter(x=>x.colecao==="lanc").length;
     toast(`${n} ${n===1?"lançamento trazido":"lançamentos trazidos"} do Keepy antigo`); render();
