@@ -254,6 +254,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2.5px soli
 .pill.late{background:var(--warn-soft);color:var(--warn)}
 .riscado{color:var(--muted);text-decoration:line-through;font-weight:600}
 .atrtag{display:inline-block;margin-left:6px;font-size:11.5px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:1px 6px;vertical-align:1px}
+.seg.seg5{display:flex}
+.seg5 button{flex:1 1 auto;white-space:nowrap;padding:9px 5px;font-size:12px;letter-spacing:-.02em}
+@media(max-width:360px){.seg5 button{font-size:10.5px;padding-inline:3px}}
+.sechead .btn{flex:none;width:auto}
+.aclist{display:flex;flex-direction:column;gap:10px}
+.accard{border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.accard b{font-size:15px}.accard small{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.accard .actions{margin-top:4px}
+.acsenha{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
 .banner.fechar{border-color:var(--accent);background:var(--accent-soft)}
 .banner.fechado{background:var(--sunk)}
 .banner .btn{flex:none}
@@ -586,8 +595,8 @@ function viewConfig(){
   const sub=state.cfgTab;
   const st=(k,t)=>`<button type="button" data-cfg="${k}" aria-pressed="${sub===k}">${t}</button>`;
   return `<div class="cfghead"><button type="button" class="iconbtn" id="cfgBack" aria-label="Voltar">‹</button><h2>Configurações</h2></div>
-  <div class="seg seg4" role="tablist">${st("usuario","Usuário")}${st("categorias","Categorias")}${st("meios","Pagamentos")}${st("sair","Sair")}</div>
-  ${sub==="categorias"? cfgCats() : sub==="meios"? cfgMeios() : sub==="sair"? cfgSair() : cfgUsuario()}`;
+  <div class="seg ${state.admin?"seg5":"seg4"}" role="tablist">${st("usuario","Usuário")}${st("categorias","Categorias")}${st("meios","Pagamentos")}${state.admin? st("acessos","Acessos") : ""}${st("sair","Sair")}</div>
+  ${sub==="categorias"? cfgCats() : sub==="meios"? cfgMeios() : sub==="sair"? cfgSair() : sub==="acessos"&&state.admin? cfgAcessos() : cfgUsuario()}`;
 }
 function retInfoTxt(k){ const n=antigos(k).length; return `Apaga lançamentos com data anterior a <b>${dataBR(corteRet(k))}</b>${state.cfg.backupEmail?`, só depois de fechados e enviados por e-mail${state.cfg.backupAte?` (enviado até ${nomeMes(state.cfg.backupAte)})`:" (nenhum mês enviado ainda)"}`:""}. ${n? `Hoje isso apagaria <b>${n} ${n===1?"lançamento":"lançamentos"}</b>.` : "Hoje nada seria apagado."}`; }
 function retBtnTxt(k){ const n=antigos(k).length; return k===retAtual()? "Salvo" : n? `Salvar e apagar ${n} ${n===1?"lançamento":"lançamentos"}` : "Salvar"; }
@@ -614,32 +623,6 @@ function cfgUsuario(){
     </div>
     <div class="err" id="sErr" hidden></div>
     <div class="actions"><button class="btn primary" type="submit" id="sGo">Trocar senha</button></div>
-  </form>
-  ${state.admin? `<form class="card sec" id="frmAcesso" novalidate>
-    <h2>Criar acesso para outra pessoa</h2>
-    <p class="muted" style="font-size:14px">A pessoa entra com o e-mail e a senha provisória, e no primeiro acesso cria a própria senha. Cada pessoa vê só os próprios lançamentos.</p>
-    <div class="field"><label for="acNome">Nome</label><input id="acNome" maxlength="60" autocomplete="off"></div>
-    <div class="grid2">
-      <div class="field"><label for="acEmail">E-mail</label><input id="acEmail" type="email" inputmode="email" autocapitalize="none" autocomplete="off"></div>
-      <div class="field"><label for="acSenha">Senha provisória</label><input id="acSenha" autocomplete="off" autocapitalize="none" placeholder="Mínimo 6 caracteres"></div>
-    </div>
-    <div class="err" id="acErr" hidden></div><div class="okmsg" id="acOk" hidden></div>
-    <div class="actions"><button class="btn primary" type="submit" id="acGo">Criar acesso</button></div>
-  </form>` : ""}
-  <section class="card sec">
-    <h2>Trazer dados do Keepy antigo</h2>
-    <p class="muted" style="font-size:14px">Se você usava o Keepy pelo claude.ai, baixe lá o arquivo de dados (Configurações › Sair › Baixar meus dados) e escolha aqui. Lançamentos com o mesmo código são substituídos, sem duplicar.</p>
-    <input type="file" id="fBackup" hidden>
-    <div class="err" id="bkErr" hidden></div>
-    <div class="actions"><button type="button" class="btn" id="btnBackup">Escolher arquivo</button></div>
-  </section>
-  <form class="card sec" id="frmRet" novalidate>
-    <h2>Tempo de histórico</h2>
-    <p class="muted" style="font-size:14px">Lançamentos mais antigos que o período escolhido são apagados sozinhos, para abrir espaço. Seu saldo em caixa e suas reservas continuam certos. Lançamentos futuros, como parcelas, nunca são apagados.</p>
-    <div class="retopts">${Object.entries(RETENCAO).map(([k,o])=>`<label class="check retopt"><input type="radio" name="ret" value="${k}" ${k===retAtual()?"checked":""}><span><b>${o.rotulo}</b><span class="hint">Guarda ${o.desc}</span></span></label>`).join("")}</div>
-    <div class="hint" id="retInfo">${retInfoTxt(retAtual())}</div>
-    <div class="err" id="rerr" hidden></div>
-    <div class="actions"><button class="btn primary" type="submit" id="rSave">${retBtnTxt(retAtual())}</button></div>
   </form>
   <section class="card sec">
     <h2>Seus registros</h2>
@@ -693,6 +676,57 @@ function cfgCats(){
     <div class="sechead"><h2>Categorias de ${tipo==="despesa"?"gastos":"entradas"}</h2><span class="label">${list.length}</span></div>
     <p class="muted" style="font-size:13.5px">A ordem desta lista é a mesma do formulário de lançamento.</p>
     <div class="list">${list.map(linha).join("")}</div>
+  </section>`;
+}
+/* ---------- acessos (administrador) ---------- */
+async function chamaAcessos(body){
+  const {data, error} = await sb.functions.invoke("acessos", {body});
+  if(error){ let det={}; try{ det=await error.context.json(); }catch(_){ } return {erro: det.erro||"falha"}; }
+  return data||{};
+}
+async function carregarAcessos(){
+  state.acCarregando=true; render();
+  const r=await chamaAcessos({acao:"listar"});
+  state.acCarregando=false; state.acErro = r.erro? "Não foi possível carregar os acessos agora." : ""; if(!r.erro) state.acessos=r.usuarios||[];
+  if(state.tab==="config" && state.cfgTab==="acessos") render();
+}
+async function removerAcesso(btn){
+  const id=btn.dataset.acrem, u=(state.acessos||[]).find(x=>x.id===id); if(!u) return;
+  if(!btn.dataset.armed){ btn.dataset.armed="1"; btn.classList.add("armed"); btn.textContent="Confirmar: remover e apagar dados"; return; }
+  btn.disabled=true; btn.textContent="Removendo…";
+  const r=await chamaAcessos({acao:"remover", id});
+  if(r.erro){ toast("Não foi possível remover agora."); btn.disabled=false; return; }
+  state.acOk=`Acesso de <b>${esc(u.nome||u.email)}</b> removido, junto com os lançamentos dessa pessoa.`; carregarAcessos();
+}
+function cfgAcessos(){
+  const lista=state.acessos;
+  const dt=s=>s? new Date(s).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "";
+  const card=u=>`<div class="accard">
+    <div class="achead"><div><b>${esc(u.nome||u.email.split("@")[0])}</b>${u.voce?` <span class="pill ok">Você</span>`:""}${u.admin&&!u.voce?` <span class="pill ok">Administrador</span>`:""}<small>${esc(u.email)}</small></div></div>
+    <small class="muted">${u.pendente? "Aguardando o primeiro acesso" : u.ultimoAcesso? `Último acesso em ${dt(u.ultimoAcesso)}` : "Ainda não entrou"} · ${u.lancamentos} ${u.lancamentos===1?"lançamento":"lançamentos"} · desde ${dt(u.criadoEm)}</small>
+    ${u.voce? "" : `<div class="actions"><button type="button" class="btn sm" data-acsenha="${u.id}">${state.acSenhaId===u.id?"Cancelar":"Redefinir senha"}</button>${u.admin? "" : `<button type="button" class="btn sm danger" data-acrem="${u.id}">Remover acesso</button>`}</div>`}
+    ${state.acSenhaId===u.id? `<form id="frmAcSenha" data-id="${u.id}" novalidate class="acsenha">
+      <div class="field"><label for="asSenha">Nova senha provisória</label><input id="asSenha" autocomplete="off" autocapitalize="none" placeholder="Mínimo 6 caracteres"></div>
+      <div class="err" id="asErr" hidden></div>
+      <div class="actions"><button type="submit" class="btn primary sm" id="asGo">Salvar senha provisória</button></div>
+    </form>` : ""}
+  </div>`;
+  return `${state.acOk? `<div class="banner"><span>${state.acOk}</span></div>` : ""}
+  <section class="card sec">
+    <div class="sechead"><h2>Acessos</h2><button type="button" class="btn sm ${state.acNovo?"":"primary"}" id="acNovoBtn">${state.acNovo?"Cancelar":"+ Novo acesso"}</button></div>
+    <p class="muted" style="font-size:14px">Quem tem acesso ao Keepy. Cada pessoa vê só os próprios lançamentos.</p>
+    ${state.acNovo? `<form id="frmAcesso" novalidate class="acsenha">
+      <div class="field"><label for="acNome">Nome</label><input id="acNome" maxlength="60" autocomplete="off"></div>
+      <div class="grid2">
+        <div class="field"><label for="acEmail">E-mail</label><input id="acEmail" type="email" inputmode="email" autocapitalize="none" autocomplete="off"></div>
+        <div class="field"><label for="acSenha">Senha provisória</label><input id="acSenha" autocomplete="off" autocapitalize="none" placeholder="Mínimo 6 caracteres"></div>
+      </div>
+      <span class="hint">No primeiro acesso, a pessoa troca a senha provisória por uma só dela.</span>
+      <div class="err" id="acErr" hidden></div><div class="okmsg" id="acOk" hidden></div>
+      <div class="actions"><button class="btn primary" type="submit" id="acGo">Criar acesso</button></div>
+    </form>` : ""}
+    ${state.acErro? `<div class="err">${state.acErro}</div>` : ""}
+    ${!lista? `<p class="muted">${state.acCarregando?"Carregando…":""}</p>` : `<div class="aclist">${lista.map(card).join("")}</div>`}
   </section>`;
 }
 function cfgSair(){
@@ -1854,10 +1888,21 @@ $("main").addEventListener("submit",async e=>{
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return falha("Digite um e-mail válido.");
     if(senha.length<6) return falha("A senha provisória precisa ter pelo menos 6 caracteres.");
     b.disabled=true; b.textContent="Criando…";
-    const {data, error} = await sb.functions.invoke("criar-acesso", {body:{nome, email, senha}});
+    const r = await chamaAcessos({acao:"criar", nome, email, senha});
     b.disabled=false; b.textContent="Criar acesso";
-    if(error){ let det={}; try{ det=await error.context.json(); }catch(_){ } return falha(det.erro==="ja_existe"? "Já existe um acesso com esse e-mail." : det.erro==="sem_permissao"? "Só o administrador cria acessos." : "Não foi possível criar o acesso agora."); }
-    f.reset(); ok.innerHTML=`Acesso criado para <b>${esc(email)}</b>. Envie o link do Keepy, o e-mail e a senha provisória para a pessoa. No primeiro acesso, ela cria a própria senha.`; ok.hidden=false; return;
+    if(r.erro) return falha(r.erro==="ja_existe"? "Já existe um acesso com esse e-mail." : r.erro==="sem_permissao"? "Só o administrador cria acessos." : "Não foi possível criar o acesso agora.");
+    state.acOk=`Acesso criado para <b>${esc(email)}</b>. Envie o link do Keepy (keepy-xp.vercel.app), o e-mail e a senha provisória. No primeiro acesso, a pessoa cria a própria senha.`;
+    state.acNovo=false; carregarAcessos(); return;
+  }
+  if(f.id==="frmAcSenha"){
+    const id=f.dataset.id, senha=$("asSenha").value, er=$("asErr"), b=$("asGo");
+    if(senha.length<6){ er.textContent="A senha provisória precisa ter pelo menos 6 caracteres."; er.hidden=false; return; }
+    b.disabled=true;
+    const r=await chamaAcessos({acao:"senha", id, senha});
+    if(r.erro){ er.textContent="Não foi possível redefinir agora."; er.hidden=false; b.disabled=false; return; }
+    const u=(state.acessos||[]).find(x=>x.id===id); state.acSenhaId=null;
+    state.acOk=`Senha de <b>${esc(u?(u.nome||u.email):"")}</b> redefinida. Envie a senha provisória para a pessoa; no próximo acesso ela cria uma nova.`;
+    carregarAcessos(); return;
   }
   if(f.id==="frmUser"){
     const v=parseBR($("fSaldoIni").value), r=parseBR($("fResIni").value||"0"), er=$("uerr");
@@ -1917,7 +1962,10 @@ $("main").addEventListener("click",async e=>{
   if(e.target.closest("#btnBackup")){ $("fBackup").click(); return; }
   if(e.target.closest("#lgEsqueci")){ esqueciSenha(); return; }
   if(e.target.closest("#cfgBack")){ state.tab=state.prevTab||"inicio"; render(); window.scrollTo(0,0); return; }
-  const cf=e.target.closest("[data-cfg]"); if(cf){ state.cfgTab=cf.dataset.cfg; state.editCat=null; state.editMeio=null; render(); return; }
+  const cf=e.target.closest("[data-cfg]"); if(cf){ state.cfgTab=cf.dataset.cfg; state.editCat=null; state.editMeio=null; state.acOk=""; state.acSenhaId=null; render(); if(state.cfgTab==="acessos") carregarAcessos(); return; }
+  if(e.target.closest("#acNovoBtn")){ state.acNovo=!state.acNovo; state.acOk=""; render(); return; }
+  const acs=e.target.closest("[data-acsenha]"); if(acs){ state.acSenhaId = state.acSenhaId===acs.dataset.acsenha? null : acs.dataset.acsenha; state.acOk=""; render(); const i=$("asSenha"); if(i) i.focus(); return; }
+  const acr=e.target.closest("[data-acrem]"); if(acr){ removerAcesso(acr); return; }
   if(await meiosClick(e)) return;
   const ct=e.target.closest("[data-cattipo]"); if(ct){ state.catTipo=ct.dataset.cattipo; state.editCat=null; render(); return; }
   const ce=e.target.closest("[data-catedit]"); if(ce){ state.editCat=ce.dataset.catedit; render(); setTimeout(()=>{ const el=$("fCatNome"); if(el) el.focus(); },30); return; }
