@@ -783,15 +783,19 @@ function render(){
 const numBR = v => { const n=parseFloat(String(v||"").replace(/[R$\s]/g,"").replace(/\./g,"").replace(",",".")); return isNaN(n)||n<0? 0 : Math.round(n*100)/100; };
 const totalAtr = d => Math.round(((Number(d.valorOriginal)||0)+(Number(d.juros)||0)+(Number(d.multa)||0))*100)/100;
 async function marcarAtraso(it){
-  const k=addMonths(ym(it.vencimento),1), ref=colL().doc();
-  const novo={tipo:it.tipo, descricao:it.descricao, categoria:it.categoria, contato:it.contato||"", meio:it.meio||"", mov:null,
+  // Vai para o dia 1º do mês seguinte, com a referência do mês de origem na descrição,
+  // para não se confundir com o lançamento do próprio mês (ex.: a conta de luz do mês seguinte).
+  const k=addMonths(ym(it.vencimento),1), ref=colL().doc(), refMes=it.refMes||ym(it.vencimento);
+  const [ry,rm]=refMes.split("-").map(Number), refTxt=new Date(ry,rm-1,1).toLocaleDateString("pt-BR",{month:"short"}).replace(".","")+"/"+ry;
+  const baseDesc=String(it.descricao).replace(/\s*\(ref\. [^)]*\)\s*$/,"");
+  const novo={tipo:it.tipo, descricao:`${baseDesc} (ref. ${refTxt})`, refMes, categoria:it.categoria, contato:it.contato||"", meio:it.meio||"", mov:null,
     valor:it.valor, valorOriginal:it.valorOriginal??it.valor, juros:it.juros||0, multa:it.multa||0,
-    vencimento:dataNoMes(k, +it.vencimento.slice(8,10)), pago:false, dataPagamento:null, origemAtraso:it.id,
+    vencimento:k+"-01", pago:false, dataPagamento:null, origemAtraso:it.id,
     criadoEm:new Date().toISOString(), ordem: typeof it.ordem==="number"? it.ordem : Date.now()};
   await ref.set(novo);
   try{ await colL().doc(it.id).update({emAtraso:true, atrasoPara:ref.id}); }
   catch(e){ try{ await ref.delete(); }catch(_){ } throw e; }
-  toast(`${it.descricao} passou para ${nomeMes(k)}. Lá você pode lançar juros e multa.`);
+  toast(`${baseDesc} passou para 1º de ${nomeMes(k)}. Lá você pode lançar juros e multa.`);
 }
 function openAtraso(it){
   const k=addMonths(ym(it.vencimento),1), mes=nomeMesSo(k), novo=state.items.find(i=>i.id===it.atrasoPara);
@@ -844,7 +848,7 @@ function openSheet(it){
         <div class="field"><label for="fJuros">Juros (R$)</label><input id="fJuros" inputmode="decimal" value="${d.juros? String(d.juros).replace(".",","):""}" placeholder="0,00"></div>
         <div class="field"><label for="fMulta">Multa (R$)</label><input id="fMulta" inputmode="decimal" value="${d.multa? String(d.multa).replace(".",","):""}" placeholder="0,00"></div>
       </div>
-      <span class="hint" id="fTotAtr">Veio atrasado${d.origemMes?` de ${esc(nomeMesSo(d.origemMes))}`:""}. Total: <b>${fmt(totalAtr(d))}</b></span>` : ""}
+      <span class="hint" id="fTotAtr">Veio atrasado${d.origemMes?` de ${esc(nomeMesSo(it.refMes||d.origemMes))}`:""}. Total: <b>${fmt(totalAtr(d))}</b></span>` : ""}
       <div class="field"><label for="fCat">Categoria</label><select id="fCat">${cats.map(c=>`<option ${c===d.categoria?"selected":""}>${esc(c)}</option>`).join("")}</select>${!inv&&d.tipo==="despesa"&&catInfo("despesa",d.categoria).dia1?`<small style="color:var(--muted);font-size:12.5px">${esc(d.categoria)} fica sempre no dia 1º do mês escolhido.</small>`:""}</div>
       <div class="grid2">
         <div class="field"><label for="fMeio">${inv? (d.mov==="resgate"?"Caiu em":"Saiu de") : d.tipo==="receita"?"Recebido por":"Meio de pagamento"}</label>${meioSelect("fMeio", d.meio||"")}</div>
@@ -932,7 +936,7 @@ function openSheet(it){
           }
         } else {
           const serieInfo = it.serie? {serie:it.serie, dia:it.dia||+it.vencimento.slice(8,10), recorrente:!!it.recorrente} : {};
-          const atrInfo = atr? {origemAtraso:it.origemAtraso, valorOriginal:d.valorOriginal, juros:d.juros||0, multa:d.multa||0} : {};
+          const atrInfo = atr? {origemAtraso:it.origemAtraso, refMes:it.refMes||null, valorOriginal:d.valorOriginal, juros:d.juros||0, multa:d.multa||0} : {};
           await col.doc(it.id).set({...base, ...serieInfo, ...atrInfo, exemplo: !!it.exemplo, criadoEm: it.criadoEm||new Date().toISOString(), ordem: typeof it.ordem==="number"? it.ordem : Date.now()});
           if($("fMeioFut") && $("fMeioFut").checked){ for(const i of futMeio) await col.doc(i.id).update({meio:base.meio}); }
           if($("fAplic") && $("fAplic").checked){ for(const i of proximosDaSerie(it)) await col.doc(i.id).update({tipo:base.tipo, mov:base.mov, descricao:base.descricao, valor:base.valor, categoria:base.categoria, contato:base.contato, meio:base.meio}); }
