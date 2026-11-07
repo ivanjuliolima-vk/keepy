@@ -547,7 +547,7 @@ function viewLanc(){
   <section class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
     <div class="kpi"><span class="label">Entradas</span><b class="pos">${fmt(rec)}</b></div>
     <div class="kpi"><span class="label">Gastos</span><b class="neg">${fmt(des)}</b></div>
-    <div class="kpi"><span class="label">Sobra no caixa</span><b class="${rec-des-invL<0?"neg":"pos"}">${fmt(rec-des-invL)}</b></div>
+    <div class="kpi"><span class="label">Sobra do mês</span><b class="${rec-des<0?"neg":"pos"}">${fmt(rec-des)}</b>${invL? `<small>${invL>0? fmt(invL)+" investido" : fmt(-invL)+" resgatado"} · ${fmt(rec-des-invL)} no caixa</small>` : ""}</div>
   </section>
   <div class="toolbar"><button type="button" class="btn sm" id="btnSel" aria-pressed="${!!state.sel}">${state.sel?"Sair da seleção":"Selecionar"}</button><button type="button" class="btn sm" id="btnImport">Importar planilha</button></div>
   <div class="busca"><label for="fBusca" class="sr">Pesquisar lançamentos</label><input id="fBusca" type="search" autocomplete="off" placeholder="Pesquisar por descrição, valor ou data" value="${esc(state.busca)}"></div>
@@ -1761,6 +1761,7 @@ async function gerarPDF(ini,fim){
     ...r.R.map(([c,v])=>["    "+c,money(v)]),
     [{content:"Gastos",styles:{fontStyle:"bold"}},{content:money(-r.gastos),styles:{fontStyle:"bold",textColor:neg}}],
     ...r.G.map(([c,v])=>["    "+c,money(-v)]),
+    [{content:"Sobra do período (entradas − gastos)",styles:{fontStyle:"bold"}},{content:money(r.tr-r.gastos),styles:{fontStyle:"bold",textColor:(r.tr-r.gastos)<0?neg:pos}}],
     ["Aplicado em investimentos",money(-r.aplic)],
     ...(r.resg? [["Resgatado de investimentos",money(r.resg)]] : []),
     [{content:"Sobra do período no caixa",styles:{fontStyle:"bold"}},{content:money(r.sobra),styles:{fontStyle:"bold",textColor:r.sobra<0?neg:pos}}]];
@@ -1850,7 +1851,8 @@ function bannerFechado(k){
 function resumoMes(k){
   const mes=doMes(k);
   const rec=somar(mes,"receita",i=>!isInv(i)), des=somar(mes,"despesa",i=>!isInv(i)&&!isCredito(i))+faturasDoMes(k).reduce((a,x)=>a+x.valor,0), invL=mes.filter(isInv).reduce((a,i)=>a+sinalRes(i),0);
-  return {entradas:fmt(rec), gastos:fmt(des), saldo:fmt(rec-des-invL)};
+  // Aplicação não é gasto: a sobra é entradas − gastos; o que foi investido vai à parte.
+  return {entradas:fmt(rec), gastos:fmt(des), saldo:fmt(rec-des), investido: invL>0? fmt(invL) : "", resgatado: invL<0? fmt(-invL) : ""};
 }
 let enviando=false;
 async function enviarPendentes(){
