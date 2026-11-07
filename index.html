@@ -251,6 +251,9 @@ input[type=date]::-webkit-calendar-picker-indicator{margin:0}
 }
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+.pill.late{background:var(--warn-soft);color:var(--warn)}
+.riscado{color:var(--muted);text-decoration:line-through;font-weight:600}
+.atrtag{display:inline-block;margin-left:6px;font-size:11.5px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:1px 6px;vertical-align:1px}
 .banner.fechar{border-color:var(--accent);background:var(--accent-soft)}
 .banner.fechado{background:var(--sunk)}
 .banner .btn{flex:none}
@@ -325,7 +328,7 @@ const monthName = (y,m) => new Date(y,m-1,1).toLocaleDateString("pt-BR",{month:"
 const shortMonth = key => { const [y,m]=key.split("-").map(Number); return new Date(y,m-1,1).toLocaleDateString("pt-BR",{month:"short"}).replace(".",""); };
 const addMonths = (key,n) => { let [y,m]=key.split("-").map(Number); m+=n; while(m>12){m-=12;y++} while(m<1){m+=12;y--} return y+"-"+pad(m); };
 
-let state = { tab:"inicio", prevTab:"inicio", cfgTab:"usuario", month: ym(todayStr()), filtro:"todos", busca:"", items:[], catCfg:null, catTipo:"despesa", editCat:null, meiosCfg:null, editMeio:null, cfg:{saldoInicial:0}, me:null, saiu:false, loaded:false, db:null, canWrite:true, readOnly:false };
+let state = { tab:"inicio", prevTab:"inicio", cfgTab:"usuario", month: ym(todayStr()), filtro:"todos", busca:"", items:[], catCfg:null, catTipo:"despesa", editCat:null, meiosCfg:null, editMeio:null, cfg:{saldoInicial:0}, atrasos:[], me:null, saiu:false, loaded:false, db:null, canWrite:true, readOnly:false };
 try{ const t=localStorage.getItem("prumo.tab"); if(t && t!=="config") state.tab=t; }catch(e){}
 try{ state.ultimoEmail = localStorage.getItem("keepy.email")||""; }catch(e){}
 
@@ -337,7 +340,14 @@ const docG = () => state.db.doc(state.base+"/geral");
 const docC = () => state.db.doc(state.base+"/categorias");
 
 function status(it){ return it.pago? "ok" : "open"; }
+// Lançamentos em atraso: o original fica no mês dele só como registro (não entra nas contas)
+// e uma cópia vai para o mês seguinte, com campos de juros e multa.
+function setItens(lista){ state.atrasos=lista.filter(i=>i.emAtraso); state.items=lista.filter(i=>!i.emAtraso); }
+const todosItens = () => [...state.items, ...(state.atrasos||[])];
+const podeAtrasar = it => !!it && !it.pago && !it.emAtraso && !isInv(it) && !isCredito(it);
+const nomeMesSo = k => nomeMes(k).split(" de ")[0];
 function pillFor(it){
+  if(it.emAtraso) return `<span class="pill late">Em atraso → ${esc(nomeMesSo(addMonths(ym(it.vencimento),1)).slice(0,3))}</span>`;
   const s=status(it);
   if(s==="ok") return `<span class="pill ok">${isInv(it)? (movOf(it)==="resgate"?"Resgatado":"Aplicado") : it.tipo==="receita"?"Recebido":"Pago"}</span>`;
   return `<span class="pill open">Em aberto</span>`;
@@ -347,9 +357,9 @@ function rowHTML(it){
   const r = it.tipo==="receita";
   return `<div class="row${state.sel&&state.sel.has(it.id)?" picked":""}" data-id="${esc(it.id)}" tabindex="0" role="${state.sel?"checkbox":"button"}"${state.sel?` aria-checked="${state.sel.has(it.id)}"`:""}>
     ${state.sel? `<div class="ck ${state.sel.has(it.id)?"on":""}" aria-hidden="true">${state.sel.has(it.id)?"✓":""}</div>` : isInv(it)? `<div class="dot i" aria-hidden="true">⇄</div>` : `<div class="dot ${r?"r":"d"}" aria-hidden="true">${r?"↓":"↑"}</div>`}
-    <div class="desc"><b>${esc(it.descricao)}</b>
+    <div class="desc"><b>${esc(it.descricao)}</b>${it.origemAtraso?`<span class="atrtag">atrasado${(it.juros||it.multa)?` · +${fmt((it.juros||0)+(it.multa||0))}`:""}</span>`:""}
       <small><span>${brDate(it.vencimento)}</span><span>·</span>${isInv(it)?`<span class="invtag">${movOf(it)==="resgate"?"Resgate":"Aplicação"}</span><span>·</span>`:""}<span>${esc(it.categoria)}</span>${it.meio&&meioNome(it.meio)?`<span>·</span><span class="meiotag">${esc(meioNome(it.meio))}</span>`:""}${it.contato?`<span>·</span><span>${esc(it.contato)}</span>`:""}${it.recorrente?`<span class="recmark" title="Repete todo mês">↻ mensal</span>`:""}${it.exemplo?`<span class="pill ex">exemplo</span>`:""}</small></div>
-    <div class="amt"><b class="${r?"pos":"neg"}">${r?"+":"−"} ${fmt(it.valor)}</b>${pillFor(it)}</div>
+    <div class="amt"><b class="${it.emAtraso?"riscado":r?"pos":"neg"}">${r?"+":"−"} ${fmt(it.valor)}</b>${pillFor(it)}</div>
   </div>`;
 }
 
@@ -386,7 +396,7 @@ function corteEfetivo(ret){
   const b=state.cfg.backupAte; if(!/^\d{4}-\d{2}$/.test(b||"")) return "0000-01-01";
   const lim=addMonths(b,1)+"-01"; return lim<c? lim : c;
 }
-const antigos = ret => state.items.filter(i=>i.vencimento < corteEfetivo(ret));
+const antigos = ret => todosItens().filter(i=>i.vencimento < corteEfetivo(ret));
 const dataBR = s => s.slice(8,10)+"/"+s.slice(5,7)+"/"+s.slice(0,4);
 // Apaga lançamentos anteriores ao corte. O que já foi pago entra no saldo em caixa e nas reservas,
 // para esses números continuarem iguais depois da limpeza.
@@ -494,7 +504,7 @@ function casaBusca(it,q){
 }
 function visiveisLanc(){
   const q=norm(state.busca);
-  let arr = q? state.items.filter(i=>casaBusca(i,q)) : lancDoMes(state.month);
+  let arr = q? todosItens().filter(i=>casaBusca(i,q)) : [...lancDoMes(state.month), ...state.atrasos.filter(i=>ym(i.vencimento)===state.month)];
   const f=state.filtro;
   if(f==="receita"||f==="despesa") arr=arr.filter(i=>i.tipo===f && !isInv(i));
   if(f==="inv") arr=arr.filter(isInv);
@@ -735,6 +745,39 @@ function render(){
   if(focada && $("fBusca")){ const el=$("fBusca"); el.focus(); try{ el.setSelectionRange(pos,pos); }catch(e){} }
 }
 
+/* ---------- atraso ---------- */
+const numBR = v => { const n=parseFloat(String(v||"").replace(/[R$\s]/g,"").replace(/\./g,"").replace(",",".")); return isNaN(n)||n<0? 0 : Math.round(n*100)/100; };
+const totalAtr = d => Math.round(((Number(d.valorOriginal)||0)+(Number(d.juros)||0)+(Number(d.multa)||0))*100)/100;
+async function marcarAtraso(it){
+  const k=addMonths(ym(it.vencimento),1), ref=colL().doc();
+  const novo={tipo:it.tipo, descricao:it.descricao, categoria:it.categoria, contato:it.contato||"", meio:it.meio||"", mov:null,
+    valor:it.valor, valorOriginal:it.valorOriginal??it.valor, juros:it.juros||0, multa:it.multa||0,
+    vencimento:dataNoMes(k, +it.vencimento.slice(8,10)), pago:false, dataPagamento:null, origemAtraso:it.id,
+    criadoEm:new Date().toISOString(), ordem: typeof it.ordem==="number"? it.ordem : Date.now()};
+  await ref.set(novo);
+  try{ await colL().doc(it.id).update({emAtraso:true, atrasoPara:ref.id}); }
+  catch(e){ try{ await ref.delete(); }catch(_){ } throw e; }
+  toast(`${it.descricao} passou para ${nomeMes(k)}. Lá você pode lançar juros e multa.`);
+}
+function openAtraso(it){
+  const k=addMonths(ym(it.vencimento),1), mes=nomeMesSo(k), novo=state.items.find(i=>i.id===it.atrasoPara);
+  $("sheetRoot").innerHTML=`<div class="sheet-bg" id="sbg"><div class="sheet">
+    <div class="sechead"><h2>Em atraso</h2><button type="button" class="iconbtn" id="sx" aria-label="Fechar">✕</button></div>
+    <p style="margin:0"><b>${esc(it.descricao)}</b> · ${fmt(it.valor)}</p>
+    <p class="muted" style="margin:0;font-size:14px">${it.tipo==="receita"?"Não foi recebido":"Não foi pago"} em ${esc(nomeMesSo(ym(it.vencimento)))} e passou para ${esc(mes)}${novo&&(novo.juros||novo.multa)?`, com ${fmt((novo.juros||0)+(novo.multa||0))} de juros e multa`:""}. Aqui ele fica só como registro e não entra nas contas deste mês.</p>
+    <div class="err" id="aErr" hidden></div>
+    <div class="actions">${novo&&!novo.pago? `<button type="button" class="btn danger" id="aDesf">Desfazer atraso</button>`:""}<button type="button" class="btn primary" id="aVer">Ver em ${esc(mes)}</button></div>
+  </div></div>`;
+  $("sx").onclick=closeSheet; $("sbg").onclick=e=>{ if(e.target.id==="sbg") closeSheet(); };
+  $("aVer").onclick=()=>{ closeSheet(); state.month=k; state.tab="lanc"; render(); window.scrollTo(0,0); };
+  if($("aDesf")){ let armed=false; $("aDesf").onclick=async()=>{
+    if(!armed){ armed=true; $("aDesf").classList.add("armed"); $("aDesf").textContent=`Confirmar: apagar de ${mes} e voltar para cá`; return; }
+    $("aDesf").disabled=true;
+    try{ await colL().doc(it.id).update({emAtraso:false, atrasoPara:null}); await colL().doc(novo.id).delete(); closeSheet(); toast("Atraso desfeito"); }
+    catch(e){ $("aErr").textContent=e&&e.code==="mes_fechado"? "Um dos meses está fechado. Reabra o mês para desfazer." : "Não foi possível desfazer agora."; $("aErr").hidden=false; $("aDesf").disabled=false; }
+  }; }
+}
+
 /* ---------- formulário ---------- */
 function hintRep(it,n){ const k1=addMonths(ym(it.vencimento),1), kn=addMonths(ym(it.vencimento),n); return n===1? `Cria uma cópia em ${nomeMesCurto(k1)}, no mesmo dia.` : `Cria ${n} cópias, de ${nomeMesCurto(k1)} a ${nomeMesCurto(kn)}, no mesmo dia.`; }
 function openSheet(it){
@@ -747,6 +790,8 @@ function openSheet(it){
   const futMeio = it? futurosRelacionados(it) : [];
   let aplicaMeioFut = true;
   if(it) d.mov=movOf(it);
+  const atr = !!(it && it.origemAtraso);
+  if(atr){ d.valorOriginal=it.valorOriginal??it.valor; d.juros=it.juros||0; d.multa=it.multa||0; const o=todosItens().find(i=>i.id===it.origemAtraso); d.origemMes=o? ym(o.vencimento) : ""; }
   const draw=()=>{
     const inv=!!d.mov;
     const cats = inv? catsInv() : catsDe(d.tipo).filter(c=>d.tipo!=="despesa" || !c.guardar).map(c=>c.nome);
@@ -758,9 +803,14 @@ function openSheet(it){
         <span class="hint" style="margin-top:-6px">${d.mov==="aplicacao"? "Sai do caixa e vai para as reservas em investimento. Não conta como gasto." : "Sai das reservas em investimento e volta para o caixa. Não conta como renda."}</span>` : ""}
       <div class="field"><label for="fDesc">Descrição</label><input id="fDesc" required maxlength="120" value="${esc(d.descricao)}" placeholder="${inv?"Ex.: Tesouro Selic, CDB, reserva de emergência":d.tipo==="receita"?"Ex.: Salário de outubro":"Ex.: Conta de luz"}"></div>
       <div class="grid2">
-        <div class="field"><label for="fVal">Valor (R$)</label><input id="fVal" inputmode="decimal" value="${d.valor!==""? String(d.valor).replace(".",","):""}" placeholder="0,00"></div>
+        ${atr? `<div class="field"><label for="fVal">Valor original (R$)</label><input id="fVal" inputmode="decimal" value="${String(d.valorOriginal).replace(".",",")}" readonly></div>` : `<div class="field"><label for="fVal">Valor (R$)</label><input id="fVal" inputmode="decimal" value="${d.valor!==""? String(d.valor).replace(".",","):""}" placeholder="0,00"></div>`}
         <div class="field"><label for="fVenc">Data</label><input id="fVenc" type="date" value="${esc(d.vencimento)}"></div>
       </div>
+      ${atr? `<div class="grid2">
+        <div class="field"><label for="fJuros">Juros (R$)</label><input id="fJuros" inputmode="decimal" value="${d.juros? String(d.juros).replace(".",","):""}" placeholder="0,00"></div>
+        <div class="field"><label for="fMulta">Multa (R$)</label><input id="fMulta" inputmode="decimal" value="${d.multa? String(d.multa).replace(".",","):""}" placeholder="0,00"></div>
+      </div>
+      <span class="hint" id="fTotAtr">Veio atrasado${d.origemMes?` de ${esc(nomeMesSo(d.origemMes))}`:""}. Total: <b>${fmt(totalAtr(d))}</b></span>` : ""}
       <div class="field"><label for="fCat">Categoria</label><select id="fCat">${cats.map(c=>`<option ${c===d.categoria?"selected":""}>${esc(c)}</option>`).join("")}</select>${!inv&&d.tipo==="despesa"&&catInfo("despesa",d.categoria).dia1?`<small style="color:var(--muted);font-size:12.5px">${esc(d.categoria)} fica sempre no dia 1º do mês escolhido.</small>`:""}</div>
       <div class="grid2">
         <div class="field"><label for="fMeio">${inv? (d.mov==="resgate"?"Caiu em":"Saiu de") : d.tipo==="receita"?"Recebido por":"Meio de pagamento"}</label>${meioSelect("fMeio", d.meio||"")}</div>
@@ -776,6 +826,7 @@ function openSheet(it){
       ${!novo && prox.length? `<label class="check"><input type="checkbox" id="fAplic"> Aplicar as alterações aos próximos ${prox.length===1?"lançamento":prox.length+" lançamentos"} desta série</label>`:""}
       <label class="check"><input type="checkbox" id="fPago" ${d.pago?"checked":""}> ${inv? (d.mov==="resgate"?"Já resgatado":"Já aplicado") : d.tipo==="receita"?"Já recebido":"Já pago"}</label>
       <div class="err" id="ferr" hidden></div>
+      ${!novo && podeAtrasar(it)? `<div class="actions"><button type="button" class="btn" id="fAtraso">${it.tipo==="receita"?"Não recebi: marcar em atraso":"Não paguei: marcar em atraso"}</button></div>` : ""}
       <div class="actions">${!novo?`<button type="button" class="btn danger" id="fDel">Excluir</button>`:""}${!novo&&prox.length?`<button type="button" class="btn danger" id="fDelProx">Excluir este e os próximos (${prox.length})</button>`:""}<button class="btn primary" type="submit" id="fSave">${novo?"Salvar lançamento":"Salvar alterações"}</button></div>
       ${novo? "" : `<div class="replic">
         ${it.recorrente? `<span class="flabel">Lançamento recorrente</span>`:""}
@@ -790,12 +841,14 @@ function openSheet(it){
           <span class="hint">Usa os dados já salvos deste lançamento. As cópias entram em aberto.</span>`}`}
       </div>`}
     </form></div>`;
-    const keep=()=>{ d.descricao=$("fDesc").value; d.valor=$("fVal").value; d.vencimento=$("fVenc").value; d.contato=$("fCont").value; d.meio=$("fMeio").value; d.pago=$("fPago").checked; d.categoria=$("fCat").value; if($("fRep")) d.repetir=Number($("fRep").value); };
+    const keep=()=>{ d.descricao=$("fDesc").value; d.valor=$("fVal").value; if(atr){ d.juros=numBR($("fJuros").value); d.multa=numBR($("fMulta").value); d.valor=totalAtr(d).toFixed(2).replace(".",","); } d.vencimento=$("fVenc").value; d.contato=$("fCont").value; d.meio=$("fMeio").value; d.pago=$("fPago").checked; d.categoria=$("fCat").value; if($("fRep")) d.repetir=Number($("fRep").value); };
     document.querySelectorAll(".seg [data-t]").forEach(b=>b.onclick=()=>{ keep(); if(b.dataset.t==="inv"){ d.mov=d.mov||"aplicacao"; d.tipo=d.mov==="resgate"?"receita":"despesa"; d.repetir=1; } else { d.mov=null; d.tipo=b.dataset.t; } draw(); });
     document.querySelectorAll(".seg [data-mov]").forEach(b=>b.onclick=()=>{ keep(); d.mov=b.dataset.mov; d.tipo=d.mov==="resgate"?"receita":"despesa"; draw(); });
     if($("fRepOn")) $("fRepOn").onchange=e=>{ keep(); repOn=e.target.checked; draw(); };
     document.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ keep(); modoRep=b.dataset.rm; draw(); });
     if($("fRep")) $("fRep").onchange=()=>{ keep(); draw(); };
+    ["fJuros","fMulta"].forEach(id=>{ if($(id)) $(id).oninput=()=>{ const j=numBR($("fJuros").value), m=numBR($("fMulta").value); $("fTotAtr").querySelector("b").textContent=fmt(totalAtr({...d,juros:j,multa:m})); }; });
+    if($("fAtraso")){ let armed=false; $("fAtraso").onclick=async()=>{ if(!armed){ armed=true; $("fAtraso").classList.add("armed"); $("fAtraso").textContent=`Confirmar: passar para ${nomeMesSo(addMonths(ym(it.vencimento),1))}`; return; } $("fAtraso").disabled=true; try{ await marcarAtraso(it); closeSheet(); }catch(e){ showErr(e); $("fAtraso").disabled=false; } }; }
     if($("fRepM")) $("fRepM").onchange=e=>{ keep(); qtdRep=Number(e.target.value); $("repHint").textContent = novo? "Além deste, "+hintRep(d,qtdRep).charAt(0).toLowerCase()+hintRep(d,qtdRep).slice(1) : hintRep(it,qtdRep); };
     if($("fReplicar")) $("fReplicar").onclick=async()=>{
       const b=$("fReplicar"); b.disabled=true; b.textContent="Replicando…";
@@ -818,7 +871,7 @@ function openSheet(it){
     if($("fMeioFut")) $("fMeioFut").onchange=e=>{ aplicaMeioFut=e.target.checked; };
     $("sx").onclick=closeSheet;
     $("sbg").onclick=e=>{ if(e.target.id==="sbg") closeSheet(); };
-    if($("fDel")){ let armed=false; $("fDel").onclick=async()=>{ if(!armed){armed=true;$("fDel").classList.add("armed");$("fDel").textContent="Toque de novo para excluir";return;} try{ await colL().doc(it.id).delete(); closeSheet(); toast("Lançamento excluído"); }catch(e){ showErr(e); } }; }
+    if($("fDel")){ let armed=false; $("fDel").onclick=async()=>{ if(!armed){armed=true;$("fDel").classList.add("armed");$("fDel").textContent="Toque de novo para excluir";return;} try{ if(it.origemAtraso && state.atrasos.some(a=>a.id===it.origemAtraso)) await colL().doc(it.origemAtraso).update({emAtraso:false, atrasoPara:null}); await colL().doc(it.id).delete(); closeSheet(); toast(it.origemAtraso? "Lançamento excluído. O original voltou para o mês dele." : "Lançamento excluído"); }catch(e){ showErr(e); } }; }
     $("frm").onsubmit=async e=>{
       e.preventDefault(); keep();
       const valor = parseFloat(String(d.valor).replace(/\./g,"").replace(",","."));
@@ -845,7 +898,8 @@ function openSheet(it){
           }
         } else {
           const serieInfo = it.serie? {serie:it.serie, dia:it.dia||+it.vencimento.slice(8,10), recorrente:!!it.recorrente} : {};
-          await col.doc(it.id).set({...base, ...serieInfo, exemplo: !!it.exemplo, criadoEm: it.criadoEm||new Date().toISOString(), ordem: typeof it.ordem==="number"? it.ordem : Date.now()});
+          const atrInfo = atr? {origemAtraso:it.origemAtraso, valorOriginal:d.valorOriginal, juros:d.juros||0, multa:d.multa||0} : {};
+          await col.doc(it.id).set({...base, ...serieInfo, ...atrInfo, exemplo: !!it.exemplo, criadoEm: it.criadoEm||new Date().toISOString(), ordem: typeof it.ordem==="number"? it.ordem : Date.now()});
           if($("fMeioFut") && $("fMeioFut").checked){ for(const i of futMeio) await col.doc(i.id).update({meio:base.meio}); }
           if($("fAplic") && $("fAplic").checked){ for(const i of proximosDaSerie(it)) await col.doc(i.id).update({tipo:base.tipo, mov:base.mov, descricao:base.descricao, valor:base.valor, categoria:base.categoria, contato:base.contato, meio:base.meio}); }
         }
@@ -1281,7 +1335,7 @@ async function gerarRecorrencias(extra){
   gerandoRec=true; let n=0;
   try{
     const horiz=addMonths(ym(todayStr()),HORIZONTE_REC);
-    const itens = extra? [...state.items.filter(i=>i.id!==extra.id), extra] : state.items;
+    const itens = extra? [...todosItens().filter(i=>i.id!==extra.id), extra] : todosItens();
     const series={}; for(const i of itens) if(i.serie) (series[i.serie]=series[i.serie]||[]).push(i);
     for(const [sid,its] of Object.entries(series)){
       const alem = x => x.recorrente && !x.pago && x.id!==sid && x.id.startsWith(sid+"_") && ym(x.vencimento)>horiz;
@@ -1891,7 +1945,7 @@ $("main").addEventListener("click",async e=>{
   const fr=e.target.closest("[data-fatura]"); if(fr && !fr.closest(".sheet")){ const [cid,k]=fr.dataset.fatura.split("|"); state.sel=null; state.tab="cartoes"; state.month=k; state.fAberta=cid; render(); window.scrollTo(0,0); return; }
   const row=e.target.closest(".row"); if(row){
     if(state.sel && state.tab==="lanc"){ const id=row.dataset.id; state.sel.has(id)? state.sel.delete(id) : state.sel.add(id); atualizaSel(); return; }
-    const it=state.items.find(i=>i.id===row.dataset.id); if(it) openSheet(it); return; }
+    const it=state.items.find(i=>i.id===row.dataset.id); if(it) openSheet(it); else { const a=state.atrasos.find(i=>i.id===row.dataset.id); if(a) openAtraso(a); } return; }
   if(e.target.closest("#btnSel")){ state.sel = state.sel? null : new Set(); render(); return; }
   const go=e.target.closest("[data-go]"); if(go){ state.tab=go.dataset.go; state.filtro="todos"; render(); return; }
   const ch=e.target.closest("[data-f]"); if(ch){ state.filtro=ch.dataset.f; document.querySelectorAll("[data-f]").forEach(c=>c.setAttribute("aria-pressed",c===ch)); const box=$("lancList"); if(box) box.innerHTML=listaLanc(); return; }
@@ -2041,7 +2095,7 @@ async function iniciar(user){
   state.trocarSenha = state.trocarSenha || !!(user.user_metadata&&user.user_metadata.trocar_senha);
   const db=criarStore(user.id); state.db=db; render();
   colL().onSnapshot(snap=>{
-    state.items = snap.docs.map(d=>({id:d.id,...d.data()})).filter(i=>i.vencimento&&typeof i.valor==="number");
+    setItens(snap.docs.map(d=>({id:d.id,...d.data()})).filter(i=>i.vencimento&&typeof i.valor==="number"));
     state.loaded=true; itensOk=true; render(); limpezaAutomatica(); recorrenciaAutomatica();
   });
   docG().onSnapshot(s=>{ state.cfg = s.exists? s.data() : {saldoInicial:0}; cfgOk=true; if(state.loaded) render(); limpezaAutomatica(); recorrenciaAutomatica(); });
