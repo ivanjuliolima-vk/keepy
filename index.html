@@ -380,16 +380,20 @@ function ordemOf(it){
   return isNaN(t)? 9e15 : t;
 }
 function saldoRealizadoAte(dateStr){
-  let s = Number(state.cfg.saldoInicial)||0;
+  let s = baseCaixa();
   for(const it of state.items){ if(it.pago && (it.dataPagamento||it.vencimento) <= dateStr) s += it.tipo==="receita"? it.valor : -it.valor; }
   return s;
 }
 function caixaHoje(){ return saldoRealizadoAte(todayStr()); }
 function reservaHoje(){
   const h=todayStr();
-  return (Number(state.cfg.reservaInicial)||0) + state.items.filter(i=>isInv(i) && i.pago && (i.dataPagamento||i.vencimento)<=h).reduce((a,i)=>a+sinalRes(i),0);
+  return baseReserva() + state.items.filter(i=>isInv(i) && i.pago && (i.dataPagamento||i.vencimento)<=h).reduce((a,i)=>a+sinalRes(i),0);
 }
-function saldoInicialPara(caixa){ return Math.round((caixa - (caixaHoje() - (Number(state.cfg.saldoInicial)||0)))*100)/100; }
+// O saldo e as reservas iniciais são os valores que a pessoa digitou em Configurações e o app nunca muda.
+// Correções do saldo de hoje e o que sai do histórico ficam em ajustes separados.
+const baseCaixa = () => (Number(state.cfg.saldoInicial)||0) + (Number(state.cfg.ajusteCaixa)||0);
+const baseReserva = () => (Number(state.cfg.reservaInicial)||0) + (Number(state.cfg.ajusteReserva)||0);
+function ajusteCaixaPara(caixa){ return Math.round((caixa - (caixaHoje() - (Number(state.cfg.ajusteCaixa)||0)))*100)/100; }
 const RETENCAO = {
   trimestre:{rotulo:"3 meses",  desc:"este mês e os 2 anteriores"},
   semestre: {rotulo:"6 meses",  desc:"este mês e os 5 anteriores"},
@@ -415,7 +419,7 @@ async function limparHistorico(ret){
   let dCaixa=0, dRes=0;
   for(const i of velhos){ if(!i.pago) continue; dCaixa += i.tipo==="receita"? i.valor : -i.valor; dRes += sinalRes(i); }
   const r2=v=>Math.round(v*100)/100;
-  await docG().set({...state.cfg, retencao:ret, saldoInicial:r2((Number(state.cfg.saldoInicial)||0)+dCaixa), reservaInicial:r2((Number(state.cfg.reservaInicial)||0)+dRes)});
+  await docG().set({...state.cfg, retencao:ret, ajusteCaixa:r2((Number(state.cfg.ajusteCaixa)||0)+dCaixa), ajusteReserva:r2((Number(state.cfg.ajusteReserva)||0)+dRes)});
   for(const i of velhos) await colL().doc(i.id).delete();
   return velhos.length;
 }
@@ -442,7 +446,7 @@ function viewInicio(){
   const aReceber = somar(mesCx,"receita",i=>!i.pago);
   const aPagar = somar(mesCx,"despesa",i=>!i.pago);
   const reservaMes = mes.filter(isInv).reduce((a,i)=>a+sinalRes(i),0);
-  const reservaTot = (Number(state.cfg.reservaInicial)||0) + state.items.filter(i=>isInv(i) && ym(i.vencimento)<=state.month).reduce((a,i)=>a+sinalRes(i),0);
+  const reservaTot = baseReserva() + state.items.filter(i=>isInv(i) && ym(i.vencimento)<=state.month).reduce((a,i)=>a+sinalRes(i),0);
   const previsto = saldo + somar(state.items,"receita",i=>!i.pago && ym(i.vencimento)<=state.month) - somar(state.items,"despesa",i=>!i.pago && ym(dataCaixa(i))<=state.month);
   const ultimos = lancDoMes(state.month).sort((a,b)=>b.vencimento.localeCompare(a.vencimento)||ordemOf(b)-ordemOf(a)).slice(0,6);
   const temEx = state.items.some(i=>i.exemplo);
@@ -611,8 +615,8 @@ function cfgUsuario(){
   <form class="card sec" id="frmUser" novalidate>
     <h2>Seus dados no Keepy</h2>
     <div class="field"><label for="fApelido">Como quer ser chamado</label><input id="fApelido" maxlength="40" value="${esc(state.cfg.apelido||"")}" placeholder="${esc(((me.name||"").split(" ")[0])||"Seu nome")}"><span class="hint">Aparece na saudação da Visão geral.</span></div>
-    <div class="field"><label for="fSaldoIni">Saldo em caixa hoje (R$)</label><input id="fSaldoIni" inputmode="decimal" value="${br2(caixaHoje())}"><span class="hint">Quanto você tem hoje na conta corrente. Não inclua investimentos.</span></div>
-    <div class="field"><label for="fResIni">Reservas já guardadas (R$)</label><input id="fResIni" inputmode="decimal" value="${(Number(state.cfg.reservaInicial)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}"><span class="hint">Quanto você já tinha investido antes de usar o Keepy. Os aportes lançados somam a esse valor.</span></div>
+    <div class="field"><label for="fSaldoIni">Saldo inicial em caixa (R$)</label><input id="fSaldoIni" inputmode="decimal" value="${br2(Number(state.cfg.saldoInicial)||0)}"><span class="hint">Quanto você tinha na conta corrente quando começou a usar o Keepy. Não inclua investimentos.</span></div>
+    <div class="field"><label for="fResIni">Reservas iniciais (R$)</label><input id="fResIni" inputmode="decimal" value="${(Number(state.cfg.reservaInicial)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}"><span class="hint">Quanto você já tinha investido quando começou a usar o Keepy. As aplicações e resgates lançados somam a esse valor.</span></div>
     <div class="err" id="uerr" hidden></div>
     <div class="actions"><button class="btn primary" type="submit" id="uSave">Salvar alterações</button></div>
   </form>
@@ -1437,7 +1441,7 @@ function openSaldo(){
     <div class="actions"><button class="btn primary" type="submit">Salvar saldo</button></div></form></div>`;
   $("sx").onclick=closeSheet; $("sbg").onclick=e=>{ if(e.target.id==="sbg") closeSheet(); };
   $("frm").onsubmit=async e=>{ e.preventDefault(); const v=parseFloat($("fSI").value.replace(/\./g,"").replace(",",".")); if(isNaN(v)){ $("ferr").textContent="Digite um número, por exemplo 12.500,00."; $("ferr").hidden=false; return; }
-    try{ await docG().set({...state.cfg, saldoInicial:saldoInicialPara(v)}); closeSheet(); toast("Saldo em caixa atualizado"); }catch(err){ $("ferr").textContent="Não foi possível salvar agora."; $("ferr").hidden=false; } };
+    try{ await docG().set({...state.cfg, ajusteCaixa:ajusteCaixaPara(v)}); closeSheet(); toast("Saldo em caixa atualizado"); }catch(err){ $("ferr").textContent="Não foi possível salvar agora."; $("ferr").hidden=false; } };
 }
 
 /* ---------- bibliotecas sob demanda ---------- */
@@ -1744,9 +1748,13 @@ async function gerarPDF(ini,fim){
   doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.text(cap(periodo),W-M,17,{align:"right"});
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.text("Gerado em "+dataBR(todayStr()),W-M,23,{align:"right"});
 
-  const caixa=caixaHoje(), inv=reservaHoje();
-  const prevFim = caixa + somar(state.items,"receita",i=>!i.pago && ym(i.vencimento)<=fim) - somar(state.items,"despesa",i=>!i.pago && ym(dataCaixa(i))<=fim);
-  const kpis=[["Meus recursos hoje",caixa+inv],["Saldo em caixa hoje",caixa],["Em investimento hoje",inv],["Caixa previsto em "+nomeMes(fim).split(" de ")[0],prevFim]];
+  // Saldos do período (pela data de lançamento): o que havia no início e o que ficou no fim.
+  const sinalCx = i => i.tipo==="receita"? i.valor : -i.valor;
+  const antes = state.items.filter(i=>ym(i.vencimento)<ini), doPer = state.items.filter(i=>{ const k=ym(i.vencimento); return k>=ini && k<=fim; });
+  const cxIni = baseCaixa() + antes.reduce((a,i)=>a+sinalCx(i),0), cxFim = cxIni + doPer.reduce((a,i)=>a+sinalCx(i),0);
+  const rsIni = baseReserva() + antes.filter(isInv).reduce((a,i)=>a+sinalRes(i),0), rsFim = rsIni + doPer.filter(isInv).reduce((a,i)=>a+sinalRes(i),0);
+  const mIni=nomeMes(ini).split(" de ")[0], mFim=nomeMes(fim).split(" de ")[0];
+  const kpis=[["Caixa no início de "+mIni,cxIni],["Reservas no início de "+mIni,rsIni],["Caixa no fim de "+mFim,cxFim],["Reservas no fim de "+mFim,rsFim]];
   let y=40; const bw=(W-2*M-3*4)/4;
   kpis.forEach(([t,v],i)=>{
     const x=M+i*(bw+4);
@@ -1761,10 +1769,10 @@ async function gerarPDF(ini,fim){
     ...r.R.map(([c,v])=>["    "+c,money(v)]),
     [{content:"Gastos",styles:{fontStyle:"bold"}},{content:money(-r.gastos),styles:{fontStyle:"bold",textColor:neg}}],
     ...r.G.map(([c,v])=>["    "+c,money(-v)]),
-    [{content:"Sobra do período (entradas − gastos)",styles:{fontStyle:"bold"}},{content:money(r.tr-r.gastos),styles:{fontStyle:"bold",textColor:(r.tr-r.gastos)<0?neg:pos}}],
+    [{content:"Sobra do período (entradas - gastos)",styles:{fontStyle:"bold"}},{content:money(r.tr-r.gastos),styles:{fontStyle:"bold",textColor:(r.tr-r.gastos)<0?neg:pos}}],
     ["Aplicado em investimentos",money(-r.aplic)],
     ...(r.resg? [["Resgatado de investimentos",money(r.resg)]] : []),
-    [{content:"Sobra do período no caixa",styles:{fontStyle:"bold"}},{content:money(r.sobra),styles:{fontStyle:"bold",textColor:r.sobra<0?neg:pos}}]];
+    [{content:"Resultado final do período (no caixa)",styles:{fontStyle:"bold"}},{content:money(r.sobra),styles:{fontStyle:"bold",textColor:r.sobra<0?neg:pos}}]];
   doc.setTextColor(...tinta); doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.text("Resumo do período",M,y);
   doc.autoTable({startY:y+3, margin:{left:M,right:M}, body:corpo, theme:"plain",
     styles:{fontSize:9.5, cellPadding:{top:1.6,bottom:1.6,left:2,right:2}, textColor:tinta, lineColor:linha, lineWidth:{bottom:0.2}},
@@ -1946,10 +1954,10 @@ $("main").addEventListener("submit",async e=>{
   }
   if(f.id==="frmUser"){
     const v=parseBR($("fSaldoIni").value), r=parseBR($("fResIni").value||"0"), er=$("uerr");
-    if(isNaN(v)){ er.textContent="Digite o saldo em caixa como número, por exemplo 1.250,00."; er.hidden=false; return; }
+    if(isNaN(v)){ er.textContent="Digite o saldo inicial como número, por exemplo 1.250,00."; er.hidden=false; return; }
     if(isNaN(r)||r<0){ er.textContent="Digite as reservas como número, por exemplo 5.000,00."; er.hidden=false; return; }
     $("uSave").disabled=true;
-    try{ await docG().set({...state.cfg, apelido:$("fApelido").value.trim(), saldoInicial:saldoInicialPara(v), reservaInicial:Math.round(r*100)/100}); toast("Dados salvos"); }
+    try{ await docG().set({...state.cfg, apelido:$("fApelido").value.trim(), saldoInicial:Math.round(v*100)/100, reservaInicial:Math.round(r*100)/100}); toast("Dados salvos"); }
     catch(err){ er.textContent="Não foi possível salvar agora. Verifique a conexão e tente de novo."; er.hidden=false; }
     const b=$("uSave"); if(b) b.disabled=false;
     return;
