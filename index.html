@@ -606,7 +606,7 @@ function cfgUsuario(){
   const meses=[...new Set(state.items.map(i=>ym(i.vencimento)))].sort();
   const mf=k=>{ const [y,m]=k.split("-").map(Number); return new Date(y,m-1,1).toLocaleDateString("pt-BR",{month:"short",year:"numeric"}).replace(".","").replace(" de "," "); };
   return `<section class="card sec">
-    <div class="perfil">${me.avatarUrl?`<img class="avatar" src="${esc(me.avatarUrl)}" alt="">`:""}<div><b>${esc(me.name||"Sua conta")}</b><small>${esc(me.email||"E-mail usado para entrar no Keepy")}</small></div></div>
+    <div class="perfil">${me.avatarUrl?`<img class="avatar" src="${esc(me.avatarUrl)}" alt="">`:""}<div><b>${esc(me.name||"Sua conta")}</b><small>${esc(me.email? "usuário: "+usuarioDe(me.email) : "Usuário usado para entrar no Keepy")}</small></div></div>
   </section>
   <form class="card sec" id="frmUser" novalidate>
     <h2>Seus dados no Keepy</h2>
@@ -705,7 +705,7 @@ async function baixarRelatorio(btn){
   try{
     const {data, error} = await sb.storage.from("relatorios").download(`${id}/${k}.pdf`);
     if(error||!data) throw 0;
-    const nm=cap1(nomeMes(k)), quem=(u&&(u.nome||u.email.split("@")[0]))||"";
+    const nm=cap1(nomeMes(k)), quem=(u&&(u.nome||usuarioDe(u.email)))||"";
     await salvarArquivo(`Keepy – ${quem? quem+" – " : ""}${nm}.pdf`, new Blob([data],{type:"application/pdf"}));
   }catch(e){ if(!(e&&e.code==="declined")) toast("Não foi possível abrir o relatório agora."); }
   btn.disabled=false; btn.textContent=t;
@@ -716,13 +716,13 @@ async function removerAcesso(btn){
   btn.disabled=true; btn.textContent="Removendo…";
   const r=await chamaAcessos({acao:"remover", id});
   if(r.erro){ toast("Não foi possível remover agora."); btn.disabled=false; return; }
-  state.acOk=`Acesso de <b>${esc(u.nome||u.email)}</b> removido, junto com os lançamentos dessa pessoa.`; carregarAcessos();
+  state.acOk=`Acesso de <b>${esc(u.nome||usuarioDe(u.email))}</b> removido, junto com os lançamentos dessa pessoa.`; carregarAcessos();
 }
 function cfgAcessos(){
   const lista=state.acessos;
   const dt=s=>s? new Date(s).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "";
   const card=u=>`<div class="accard">
-    <div class="achead"><div><b>${esc(u.nome||u.email.split("@")[0])}</b>${u.voce?` <span class="pill ok">Você</span>`:""}${u.admin&&!u.voce?` <span class="pill ok">Administrador</span>`:""}<small>${esc(u.email)}</small></div></div>
+    <div class="achead"><div><b>${esc(u.nome||usuarioDe(u.email))}</b>${u.voce?` <span class="pill ok">Você</span>`:""}${u.admin&&!u.voce?` <span class="pill ok">Administrador</span>`:""}<small>usuário: ${esc(usuarioDe(u.email))}</small></div></div>
     <small class="muted">${u.pendente? "Aguardando o primeiro acesso" : u.ultimoAcesso? `Último acesso em ${dt(u.ultimoAcesso)}` : "Ainda não entrou"} · ${u.lancamentos} ${u.lancamentos===1?"lançamento":"lançamentos"} · desde ${dt(u.criadoEm)}</small>
     ${u.voce? "" : `<div class="actions"><button type="button" class="btn sm" data-acrel="${u.id}" aria-expanded="${state.acRelId===u.id}">${state.acRelId===u.id?"Esconder relatórios":"Relatórios"}</button><button type="button" class="btn sm" data-acsenha="${u.id}">${state.acSenhaId===u.id?"Cancelar":"Redefinir senha"}</button>${u.admin? "" : `<button type="button" class="btn sm danger" data-acrem="${u.id}">Remover acesso</button>`}</div>`}
     ${state.acRelId===u.id? `<div class="acsenha">${!state.acRels? `<small class="muted">Carregando…</small>` : !state.acRels.length? `<small class="muted">Nenhum mês fechado ainda.</small>` : state.acRels.map(r=>`<div class="relrow"><span>${esc(cap1(nomeMes(r.k)))}</span><button type="button" class="btn sm" data-acpdf="${u.id}|${r.k}">Abrir PDF</button></div>`).join("")}</div>` : ""}
@@ -739,7 +739,7 @@ function cfgAcessos(){
     ${state.acNovo? `<form id="frmAcesso" novalidate class="acsenha">
       <div class="field"><label for="acNome">Nome</label><input id="acNome" maxlength="60" autocomplete="off"></div>
       <div class="grid2">
-        <div class="field"><label for="acEmail">E-mail</label><input id="acEmail" type="email" inputmode="email" autocapitalize="none" autocomplete="off"></div>
+        <div class="field"><label for="acUser">Usuário</label><input id="acUser" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off" placeholder="Ex.: raquel"></div>
         <div class="field"><label for="acSenha">Senha provisória</label><input id="acSenha" autocomplete="off" autocapitalize="none" placeholder="Mínimo 6 caracteres"></div>
       </div>
       <span class="hint">No primeiro acesso, a pessoa troca a senha provisória por uma só dela.</span>
@@ -755,7 +755,7 @@ function cfgSair(){
   return `<section class="card sec">
     <h2>Sair do Keepy</h2>
     <p>Encerra o acesso neste aparelho. Para entrar de novo, é preciso o e-mail e a senha.</p>
-    <p class="muted" style="font-size:14px">Seus dados continuam salvos na sua conta${me.email?` (${esc(me.email)})`:""}.</p>
+    <p class="muted" style="font-size:14px">Seus dados continuam salvos na sua conta${me.email?` (usuário ${esc(usuarioDe(me.email))})`:""}.</p>
     <div class="actions"><button type="button" class="btn danger armed" id="btnSair">Sair do Keepy</button></div>
   </section>`;
 }
@@ -774,7 +774,7 @@ function lockHTML(){
   </form>`;
   return `<form class="card lock" id="frmLogin" novalidate style="text-align:left">
     <span class="big">Entrar no Keepy</span>
-    <div class="field" style="width:100%"><label for="lgUser">E-mail</label><input id="lgUser" type="email" autocomplete="username" autocapitalize="none" inputmode="email" value="${esc(state.ultimoEmail||"")}"></div>
+    <div class="field" style="width:100%"><label for="lgUser">Usuário</label><input id="lgUser" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(usuarioDe(state.ultimoEmail||""))}"></div>
     <div class="field" style="width:100%"><label for="lgPass">Senha</label><input id="lgPass" type="password" autocomplete="current-password"></div>
     <div class="err" id="lgErr" hidden></div>
     <div class="okmsg" id="lgOk" hidden></div>
@@ -1838,7 +1838,7 @@ async function reabrirMes(btn){
 function bannerFechar(k, ondeLanc){
   if(!k) return "";
   const mes=nomeMes(k).split(" de ")[0];
-  return `<div class="banner fechar"><span><b>${cap1(mes)} terminou.</b> Confira os lançamentos e feche o mês. Depois de fechado, ninguém mais altera ${mes}${state.cfg.backupEmail?` e o relatório em PDF vai para ${esc(state.me&&state.me.email||"o seu e-mail")}`:" e o relatório em PDF fica guardado"}.</span>${ondeLanc||state.month===k? "" : `<button class="btn sm" data-vermes="${k}">Ver ${mes}</button>`}<button class="btn primary sm" data-fecharmes="${k}">Fechar ${mes}</button></div>`;
+  return `<div class="banner fechar"><span><b>${cap1(mes)} terminou.</b> Confira os lançamentos e feche o mês. Depois de fechado, ninguém mais altera ${mes}${state.cfg.backupEmail?` e o relatório em PDF vai para o seu e-mail`:" e o relatório em PDF fica guardado"}.</span>${ondeLanc||state.month===k? "" : `<button class="btn sm" data-vermes="${k}">Ver ${mes}</button>`}<button class="btn primary sm" data-fecharmes="${k}">Fechar ${mes}</button></div>`;
 }
 function bannerFechado(k){
   if(!mesFechado(k)) return "";
@@ -1902,11 +1902,11 @@ $("main").addEventListener("submit",async e=>{
   e.preventDefault();
   const f=e.target;
   if(f.id==="frmLogin"){
-    const er=$("lgErr"), b=$("lgGo"), email=$("lgUser").value.trim(), senha=$("lgPass").value;
-    er.hidden=true; if(!email||!senha){ er.textContent="Digite seu e-mail e sua senha."; er.hidden=false; return; }
+    const er=$("lgErr"), b=$("lgGo"), login=$("lgUser").value.trim(), email=emailDe(login), senha=$("lgPass").value;
+    er.hidden=true; if(!login||!senha){ er.textContent="Digite seu usuário e sua senha."; er.hidden=false; return; }
     b.disabled=true; b.textContent="Entrando…";
     const {data, error} = await sb.auth.signInWithPassword({email, password:senha});
-    if(error){ er.textContent = /confirm/i.test(error.message)? "Confirme seu e-mail antes de entrar." : "E-mail ou senha incorretos."; er.hidden=false; b.disabled=false; b.textContent="Entrar"; $("lgPass").value=""; return; }
+    if(error){ er.textContent = /confirm/i.test(error.message)? "Confirme seu e-mail antes de entrar." : "Usuário ou senha incorretos."; er.hidden=false; b.disabled=false; b.textContent="Entrar"; $("lgPass").value=""; return; }
     try{ localStorage.setItem("keepy.email", email); }catch(_){ }
     iniciar(data.user); return;
   }
@@ -1921,15 +1921,15 @@ $("main").addEventListener("submit",async e=>{
     state.trocarSenha=false; state.recuperando=false; toast("Senha salva"); render(); limpezaAutomatica(); return;
   }
   if(f.id==="frmAcesso"){
-    const er=$("acErr"), ok=$("acOk"), b=$("acGo"), nome=$("acNome").value.trim(), email=$("acEmail").value.trim(), senha=$("acSenha").value;
+    const er=$("acErr"), ok=$("acOk"), b=$("acGo"), nome=$("acNome").value.trim(), usuario=$("acUser").value.trim().toLowerCase(), senha=$("acSenha").value;
     er.hidden=true; ok.hidden=true; const falha=t=>{ er.textContent=t; er.hidden=false; };
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return falha("Digite um e-mail válido.");
+    if(!/^[a-z0-9._-]{3,30}$/.test(usuario)) return falha("O usuário precisa ter de 3 a 30 letras ou números, sem espaços e sem acentos. Pode usar ponto, hífen e sublinhado.");
     if(senha.length<6) return falha("A senha provisória precisa ter pelo menos 6 caracteres.");
     b.disabled=true; b.textContent="Criando…";
-    const r = await chamaAcessos({acao:"criar", nome, email, senha});
+    const r = await chamaAcessos({acao:"criar", nome, usuario, senha});
     b.disabled=false; b.textContent="Criar acesso";
-    if(r.erro) return falha(r.erro==="ja_existe"? "Já existe um acesso com esse e-mail." : r.erro==="sem_permissao"? "Só o administrador cria acessos." : "Não foi possível criar o acesso agora.");
-    state.acOk=`Acesso criado para <b>${esc(email)}</b>. Envie o link do Keepy (keepy-xp.vercel.app), o e-mail e a senha provisória. No primeiro acesso, a pessoa cria a própria senha.`;
+    if(r.erro) return falha(r.erro==="ja_existe"? "Esse usuário já existe. Escolha outro." : r.erro==="sem_permissao"? "Só o administrador cria acessos." : "Não foi possível criar o acesso agora.");
+    state.acOk=`Acesso criado: usuário <b>${esc(usuario)}</b>. Envie para a pessoa o link do Keepy (keepy-xp.vercel.app), o usuário e a senha provisória. No primeiro acesso, ela cria a própria senha.`;
     state.acNovo=false; carregarAcessos(); return;
   }
   if(f.id==="frmAcSenha"){
@@ -1939,7 +1939,7 @@ $("main").addEventListener("submit",async e=>{
     const r=await chamaAcessos({acao:"senha", id, senha});
     if(r.erro){ er.textContent="Não foi possível redefinir agora."; er.hidden=false; b.disabled=false; return; }
     const u=(state.acessos||[]).find(x=>x.id===id); state.acSenhaId=null;
-    state.acOk=`Senha de <b>${esc(u?(u.nome||u.email):"")}</b> redefinida. Envie a senha provisória para a pessoa; no próximo acesso ela cria uma nova.`;
+    state.acOk=`Senha de <b>${esc(u?(u.nome||usuarioDe(u.email)):"")}</b> redefinida. Envie a senha provisória para a pessoa; no próximo acesso ela cria uma nova.`;
     carregarAcessos(); return;
   }
   if(f.id==="frmUser"){
@@ -2145,13 +2145,13 @@ function criarStore(uid){
   };
   return api;
 }
+// Login por usuário: por baixo, cada usuário vira um endereço interno que nunca recebe e-mail.
+const DOM_USUARIO = "keepy-xp.vercel.app";
+const emailDe = login => { const l=String(login||"").trim().toLowerCase(); return l.includes("@")? l : `${l}@${DOM_USUARIO}`; };
+const usuarioDe = email => { const e=String(email||""); return e.endsWith("@"+DOM_USUARIO)? e.slice(0, -DOM_USUARIO.length-1) : e; };
 async function esqueciSenha(){
-  const er=$("lgErr"), ok=$("lgOk"), email=$("lgUser").value.trim();
-  er.hidden=true; ok.hidden=true;
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ er.textContent="Digite seu e-mail acima e toque de novo em “Esqueci minha senha”."; er.hidden=false; return; }
-  const {error}=await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin+location.pathname});
-  if(error){ er.textContent="Não foi possível enviar agora. Tente de novo em alguns minutos."; er.hidden=false; return; }
-  ok.textContent=`Se ${email} tiver acesso ao Keepy, chega um e-mail com o link para criar uma nova senha.`; ok.hidden=false;
+  const er=$("lgErr"), ok=$("lgOk");
+  er.hidden=true; ok.textContent="Peça para o administrador do Keepy redefinir a sua senha. Ele cria uma senha provisória e você troca no primeiro acesso."; ok.hidden=false;
 }
 async function importarBackup(file){
   const er=$("bkErr"); er.hidden=true;
