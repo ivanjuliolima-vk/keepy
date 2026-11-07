@@ -619,7 +619,7 @@ function cfgUsuario(){
   <section class="card sec">
     <h2>Trazer dados do Keepy antigo</h2>
     <p class="muted" style="font-size:14px">Se você usava o Keepy pelo claude.ai, baixe lá o arquivo de dados (Configurações › Sair › Baixar meus dados) e escolha aqui. Lançamentos com o mesmo código são substituídos, sem duplicar.</p>
-    <input type="file" id="fBackup" accept=".json,application/json" hidden>
+    <input type="file" id="fBackup" hidden>
     <div class="err" id="bkErr" hidden></div>
     <div class="actions"><button type="button" class="btn" id="btnBackup">Escolher arquivo</button></div>
   </section>
@@ -2013,18 +2013,25 @@ async function esqueciSenha(){
 }
 async function importarBackup(file){
   const er=$("bkErr"); er.hidden=true;
+  let etapa="ler";
   try{
-    const j=JSON.parse(await file.text());
+    const txt=await file.text(); etapa="formato";
+    const j=JSON.parse(txt.replace(/^\uFEFF/,""));
     if(!j || j.app!=="keepy" || !Array.isArray(j.docs)) throw 0;
+    etapa="salvar";
     const lista=j.docs.filter(x=>x && (x.colecao==="lanc"||x.colecao==="cfg") && typeof x.id==="string" && x.data && typeof x.data==="object");
     if(!lista.length) throw 0;
     const f=fechadoAte(); if(f && lista.some(x=>x.colecao==="lanc" && x.data.vencimento && x.data.vencimento.slice(0,7)<=f)){ er.textContent="O arquivo tem lançamentos de meses já fechados. Reabra esses meses antes de trazer os dados."; er.hidden=false; return; }
     // Mantém as travas de fechamento e envio já existentes na versão nova.
     lista.forEach(x=>{ if(x.colecao==="cfg" && x.id==="geral"){ const {fechadoAte,backupAte,backupEmail}=state.cfg; x.data={...x.data}; ["fechadoAte","backupAte","backupEmail"].forEach(k=>delete x.data[k]); Object.assign(x.data, JSON.parse(JSON.stringify({fechadoAte,backupAte,backupEmail}))); } });
+    const bt=$("btnBackup"); if(bt){ bt.disabled=true; bt.textContent="Trazendo dados…"; }
     await state.db.importar(lista);
     const n=lista.filter(x=>x.colecao==="lanc").length;
     toast(`${n} ${n===1?"lançamento trazido":"lançamentos trazidos"} do Keepy antigo`); render();
-  }catch(e){ er.textContent="Não consegui ler esse arquivo. Escolha o arquivo de dados baixado no Keepy antigo."; er.hidden=false; }
+  }catch(e){
+    er.textContent = etapa==="salvar"? `Li o arquivo, mas não consegui salvar os dados (${(e&&e.message)||"erro de conexão"}). Tente de novo.` : etapa==="formato"? `O arquivo “${file.name}” não é o arquivo de dados do Keepy antigo. Ele se chama keepy-dados.json.` : "Não consegui abrir esse arquivo. Tente escolher de novo.";
+    er.hidden=false;
+  }
 }
 document.addEventListener("change",e=>{ if(e.target.id==="fBackup" && e.target.files[0]){ importarBackup(e.target.files[0]); e.target.value=""; } });
 
