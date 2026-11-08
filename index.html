@@ -470,7 +470,7 @@ function viewInicio(){
   </section>
   <section class="sec">
     <div class="sechead"><h2>Últimos lançamentos</h2><button class="linkbtn" data-go="lanc">Ver todos</button></div>
-    <div class="list">${ultimos.length? ultimos.map(rowHTML).join("") : `<div class="empty">Nenhum lançamento neste mês. Toque em “Novo lançamento” para registrar uma entrada ou um gasto.</div>`}</div>
+    <div class="list">${ultimos.length? ultimos.map(rowHTML).join("") : `<div class="empty">Nenhum lançamento neste mês. Toque em “Novo lançamento” para registrar uma entrada ou uma saída.</div>`}</div>
   </section>`;
 }
 
@@ -493,15 +493,15 @@ function chartFluxo(){
   data.forEach((x,i)=>{
     const cx=L+step*i+step/2;
     g+=`<rect x="${cx-bw-2}" y="${y(x.r)}" width="${bw}" height="${Math.max(0,y(0)-y(x.r))}" rx="3" fill="var(--pos)"><title>Entradas ${fmt(x.r)}</title></rect>`;
-    g+=`<rect x="${cx+2}" y="${y(x.d)}" width="${bw}" height="${Math.max(0,y(0)-y(x.d))}" rx="3" fill="var(--neg)" opacity=".85"><title>Gastos ${fmt(x.d)}</title></rect>`;
+    g+=`<rect x="${cx+2}" y="${y(x.d)}" width="${bw}" height="${Math.max(0,y(0)-y(x.d))}" rx="3" fill="var(--neg)" opacity=".85"><title>Saídas ${fmt(x.d)}</title></rect>`;
     const cur = x.k===state.month;
     g+=`<text x="${cx}" y="${H-10}" text-anchor="middle" font-size="12" font-weight="${cur?700:400}" fill="${cur?"var(--ink)":"var(--muted)"}">${shortMonth(x.k)}</text>`;
   });
   const pts = saldos.map((s,i)=>[L+step*i+step/2, y(s)]);
   g+=`<polyline points="${pts.map(p=>p.join(",")).join(" ")}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>`;
   pts.forEach((p,i)=>{ g+=`<circle cx="${p[0]}" cy="${p[1]}" r="${i===pts.length-1?4.5:3}" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"><title>Saldo previsto ${fmt(saldos[i])}</title></circle>`; });
-  return `<div class="chartbox"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Entradas, gastos e saldo previsto por mês">${g}</svg></div>
-  <div class="legend"><span><i style="background:var(--pos)"></i>Entradas</span><span><i style="background:var(--neg)"></i>Gastos</span><span><i style="background:var(--ink);height:3px"></i>Saldo previsto no fim do mês</span></div>`;
+  return `<div class="chartbox"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Entradas, saídas e saldo previsto por mês">${g}</svg></div>
+  <div class="legend"><span><i style="background:var(--pos)"></i>Entradas</span><span><i style="background:var(--neg)"></i>Saídas</span><span><i style="background:var(--ink);height:3px"></i>Saldo previsto no fim do mês</span></div>`;
 }
 
 function norm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
@@ -550,12 +550,12 @@ function viewLanc(){
   return `${kF===state.month? bannerFechar(kF,true) : ""}${bannerFechado(state.month)}
   <section class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
     <div class="kpi"><span class="label">Entradas</span><b class="pos">${fmt(rec)}</b></div>
-    <div class="kpi"><span class="label">Gastos</span><b class="neg">${fmt(des)}</b></div>
+    <div class="kpi"><span class="label">Saídas</span><b class="neg">${fmt(des)}</b></div>
     <div class="kpi"><span class="label">Sobra do mês</span><b class="${rec-des<0?"neg":"pos"}">${fmt(rec-des)}</b>${invL? `<small>${invL>0? fmt(invL)+" investido" : fmt(-invL)+" resgatado"} · ${fmt(rec-des-invL)} no caixa</small>` : ""}</div>
   </section>
   <div class="toolbar"><button type="button" class="btn sm" id="btnSel" aria-pressed="${!!state.sel}">${state.sel?"Sair da seleção":"Selecionar"}</button><button type="button" class="btn sm" id="btnImport">Importar planilha</button></div>
   <div class="busca"><label for="fBusca" class="sr">Pesquisar lançamentos</label><input id="fBusca" type="search" autocomplete="off" placeholder="Pesquisar por descrição, valor ou data" value="${esc(state.busca)}"></div>
-  <div class="filters">${chip("todos","Todos")}${chip("receita","Entradas")}${chip("despesa","Gastos")}${chip("inv","Investimentos")}${chip("aberto","Em aberto")}</div>
+  <div class="filters">${chip("todos","Todos")}${chip("receita","Entradas")}${chip("despesa","Saídas")}${chip("inv","Investimentos")}${chip("aberto","Em aberto")}</div>
   <div id="lancList" class="sec">${listaLanc()}</div>`;
 }
 
@@ -574,12 +574,12 @@ function viewRel(){
     <table class="dre"><tbody>
       <tr><td><b>Entradas</b></td><td class="pos"><b>${fmt(tr)}</b></td></tr>
       ${R.map(([c,v])=>`<tr class="sub"><td>${esc(c)}</td><td>${fmt(v)}</td></tr>`).join("")}
-      <tr><td><b>Gastos</b></td><td class="neg"><b>${fmt(-gastos)}</b>${pct(gastos)}</td></tr>
+      <tr><td><b>Saídas</b></td><td class="neg"><b>${fmt(-gastos)}</b>${pct(gastos)}</td></tr>
       ${G.map(([c,v])=>`<tr class="sub"><td>${esc(c)}</td><td>${fmt(-v)}</td></tr>`).join("")}
       <tr><td>Aplicado em investimentos</td><td>${fmt(-aplic)}${pct(aplic)}</td></tr>
       ${resg? `<tr><td>Resgatado de investimentos</td><td class="pos">${fmt(resg)}</td></tr>` : ""}
       <tr class="tot"><td>Sobra do mês no caixa</td><td class="${sobra<0?"neg":"pos"}">${fmt(sobra)}</td></tr>
-      <tr class="sub"><td>Quanto da renda não foi gasto</td><td>${tr? poup.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%":"—"}</td></tr>
+      <tr class="sub"><td>Quanto da renda não saiu</td><td>${tr? poup.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%":"—"}</td></tr>
     </tbody></table>
   </section>
   <section class="kpis">
@@ -589,8 +589,8 @@ function viewRel(){
     <div class="kpi"><span class="label">Lançamentos</span><b>${mes.length}</b><small>${mes.filter(i=>!i.pago).length} em aberto</small></div>
   </section>
   <section class="card sec">
-    <div class="sechead"><h2>Para onde foi o dinheiro</h2><span class="label">gastos</span></div>
-    ${G.length? `<div class="bars">${G.map(([c,v])=>`<div class="bar"><div class="t"><span>${esc(c)}</span><span><b>${fmt(v)}</b> <span style="color:var(--muted)">${(v/gastos*100).toFixed(0)}%</span></span></div><div class="track"><div class="fill" style="width:${(v/maxD*100).toFixed(1)}%"></div></div></div>`).join("")}</div>` : `<div class="empty">Sem gastos neste mês.</div>`}
+    <div class="sechead"><h2>Para onde foi o dinheiro</h2><span class="label">saídas</span></div>
+    ${G.length? `<div class="bars">${G.map(([c,v])=>`<div class="bar"><div class="t"><span>${esc(c)}</span><span><b>${fmt(v)}</b> <span style="color:var(--muted)">${(v/gastos*100).toFixed(0)}%</span></span></div><div class="track"><div class="fill" style="width:${(v/maxD*100).toFixed(1)}%"></div></div></div>`).join("")}</div>` : `<div class="empty">Sem saídas neste mês.</div>`}
   </section>${meiosRel(mes)}`;
 }
 
@@ -635,7 +635,7 @@ function cfgUsuario(){
       <tr><td>Lançamentos</td><td><b>${state.items.length}</b></td></tr>
       <tr><td>Meios de pagamento</td><td><b>${meiosLista().length}</b></td></tr>
       <tr><td>Em aberto</td><td><b>${state.items.filter(i=>!i.pago).length}</b></td></tr>
-      <tr><td>Categorias</td><td><b>${catsDe("despesa").length} de gastos · ${catsDe("receita").length} de entradas</b></td></tr>
+      <tr><td>Categorias</td><td><b>${catsDe("despesa").length} de saídas · ${catsDe("receita").length} de entradas</b></td></tr>
       <tr><td>Período</td><td><b>${meses.length? mf(meses[0])+" a "+mf(meses[meses.length-1]) : "—"}</b></td></tr>
     </tbody></table>
   </section>`;
@@ -650,7 +650,7 @@ function cfgCats(){
       <label class="check"><input type="checkbox" id="${pfx}Dia1" ${c.dia1?"checked":""}> Sempre no dia 1º do mês</label>
       <span class="hint" style="margin-top:-6px">Bom para assinaturas e seguros. Vale para os próximos lançamentos.</span>
       <label class="check"><input type="checkbox" id="${pfx}Guardar" ${c.guardar?"checked":""}> Categoria de investimento</label>
-      <span class="hint" style="margin-top:-6px">Os lançamentos dela são aplicações ou resgates: não contam como gasto nem como renda e movem o valor entre o caixa e as reservas.</span>`;
+      <span class="hint" style="margin-top:-6px">Os lançamentos dela são aplicações ou resgates: não contam como saída nem como renda e movem o valor entre o caixa e as reservas.</span>`;
   const linha=(c,idx)=>{
     const [n,v]=uso(c.nome);
     if(state.editCat===c.nome){
@@ -669,16 +669,16 @@ function cfgCats(){
     return `<div class="trow"><div class="info"><b style="font-weight:600">${esc(c.nome)}</b><small>${n} ${n===1?"lançamento":"lançamentos"}${v?` · ${fmt(v)}`:""}</small>${(c.dia1||c.guardar||!salvas.has(c.nome))?`<div style="display:flex;gap:4px;flex-wrap:wrap">${flags(c)}</div>`:""}</div>
       <div class="acts"><button type="button" class="btn sm" data-catmove="${idx}" data-dir="-1" aria-label="Subir ${esc(c.nome)}" ${idx===0?"disabled":""}>↑</button><button type="button" class="btn sm" data-catmove="${idx}" data-dir="1" aria-label="Descer ${esc(c.nome)}" ${idx===list.length-1?"disabled":""}>↓</button>${n?`<button type="button" class="btn sm" data-catver="${esc(c.nome)}">Ver</button>`:""}<button type="button" class="btn sm" data-catedit="${esc(c.nome)}">Editar</button></div></div>`;
   };
-  return `<div class="seg">${sT("despesa","Gastos")}${sT("receita","Entradas")}</div>
+  return `<div class="seg">${sT("despesa","Saídas")}${sT("receita","Entradas")}</div>
   <form class="card sec" id="frmCat" novalidate>
-    <h2>Nova categoria de ${tipo==="despesa"?"gasto":"entrada"}</h2>
+    <h2>Nova categoria de ${tipo==="despesa"?"saída":"entrada"}</h2>
     <div class="field"><label for="fCatNova">Nome</label><input id="fCatNova" maxlength="40" placeholder="${tipo==="despesa"?"Ex.: Pets, Presentes, Academia":"Ex.: Aluguel recebido, Vendas"}"></div>
     ${checks({},"nv")}
     <div class="err" id="cerr" hidden></div>
     <div class="actions"><button class="btn primary" type="submit" id="cSave">Adicionar categoria</button></div>
   </form>
   <section class="sec">
-    <div class="sechead"><h2>Categorias de ${tipo==="despesa"?"gastos":"entradas"}</h2><span class="label">${list.length}</span></div>
+    <div class="sechead"><h2>Categorias de ${tipo==="despesa"?"saídas":"entradas"}</h2><span class="label">${list.length}</span></div>
     <p class="muted" style="font-size:13.5px">A ordem desta lista é a mesma do formulário de lançamento.</p>
     <div class="list">${list.map(linha).join("")}</div>
   </section>`;
@@ -861,9 +861,9 @@ function openSheet(it){
     if(!cats.includes(d.categoria)) d.categoria=cats[0];
     $("sheetRoot").innerHTML=`<div class="sheet-bg" id="sbg"><form class="sheet" id="frm" novalidate>
       <div class="sechead"><h2>${novo?"Novo lançamento":"Editar lançamento"}</h2><button type="button" class="iconbtn" id="sx" aria-label="Fechar">✕</button></div>
-      <div class="seg seg3"><button type="button" data-t="receita" aria-pressed="${!inv&&d.tipo==="receita"}">Entrada</button><button type="button" data-t="despesa" aria-pressed="${!inv&&d.tipo==="despesa"}">Gasto</button><button type="button" data-t="inv" aria-pressed="${inv}">Investimento</button></div>
+      <div class="seg seg3"><button type="button" data-t="receita" aria-pressed="${!inv&&d.tipo==="receita"}">Entrada</button><button type="button" data-t="despesa" aria-pressed="${!inv&&d.tipo==="despesa"}">Saída</button><button type="button" data-t="inv" aria-pressed="${inv}">Investimento</button></div>
       ${inv? `<div class="seg"><button type="button" data-mov="aplicacao" aria-pressed="${d.mov==="aplicacao"}">Aplicação</button><button type="button" data-mov="resgate" aria-pressed="${d.mov==="resgate"}">Resgate</button></div>
-        <span class="hint" style="margin-top:-6px">${d.mov==="aplicacao"? "Sai do caixa e vai para as reservas em investimento. Não conta como gasto." : "Sai das reservas em investimento e volta para o caixa. Não conta como renda."}</span>` : ""}
+        <span class="hint" style="margin-top:-6px">${d.mov==="aplicacao"? "Sai do caixa e vai para as reservas em investimento. Não conta como saída." : "Sai das reservas em investimento e volta para o caixa. Não conta como renda."}</span>` : ""}
       <div class="field"><label for="fDesc">Descrição</label><input id="fDesc" required maxlength="120" value="${esc(d.descricao)}" placeholder="${inv?"Ex.: Tesouro Selic, CDB, reserva de emergência":d.tipo==="receita"?"Ex.: Salário de outubro":"Ex.: Conta de luz"}"></div>
       <div class="grid2">
         ${atr? `<div class="field"><label for="fVal">Valor original (R$)</label><input id="fVal" inputmode="decimal" value="${String(d.valorOriginal).replace(".",",")}" readonly></div>` : `<div class="field"><label for="fVal">Valor (R$)</label><input id="fVal" inputmode="decimal" value="${d.valor!==""? String(d.valor).replace(".",","):""}" placeholder="0,00"></div>`}
@@ -1029,7 +1029,7 @@ function cfgMeios(){
         <div class="actions"><button type="button" class="btn sm danger" id="meioDel">${n?"Excluir e mover lançamentos":"Excluir meio de pagamento"}</button></div>
       </div>
     </form>`;
-    return `<div class="trow"><div class="info"><b style="font-weight:600">${esc(m.nome)}</b><small>${TIPOS_MEIO[m.tipo]||"Outro"} · ${n} ${n===1?"lançamento":"lançamentos"}${v?` · ${fmt(v)} em gastos`:""}</small>${pad===m.id?`<span class="pill open">Padrão</span>`:""}</div>
+    return `<div class="trow"><div class="info"><b style="font-weight:600">${esc(m.nome)}</b><small>${TIPOS_MEIO[m.tipo]||"Outro"} · ${n} ${n===1?"lançamento":"lançamentos"}${v?` · ${fmt(v)} em saídas`:""}</small>${pad===m.id?`<span class="pill open">Padrão</span>`:""}</div>
       <div class="acts"><button type="button" class="btn sm" data-meiomove="${idx}" data-dir="-1" aria-label="Subir ${esc(m.nome)}" ${idx===0?"disabled":""}>↑</button><button type="button" class="btn sm" data-meiomove="${idx}" data-dir="1" aria-label="Descer ${esc(m.nome)}" ${idx===lista.length-1?"disabled":""}>↓</button>${n?`<button type="button" class="btn sm" data-meiover="${esc(m.id)}">Ver</button>`:""}<button type="button" class="btn sm" data-meioedit="${esc(m.id)}">Editar</button></div></div>`;
   };
   const totCand=cand.reduce((a,x)=>a+x[1],0);
@@ -1164,7 +1164,7 @@ function meiosRel(mes){
   if(!gastos.length) return "";
   const m={}; gastos.forEach(i=>{ const k=i.meio&&meioById(i.meio)? i.meio : ""; m[k]=(m[k]||0)+i.valor; });
   const rows=Object.entries(m).sort((a,b)=>b[1]-a[1]), tot=gastos.reduce((a,i)=>a+i.valor,0), max=Math.max(1,...rows.map(r=>r[1]));
-  return `<section class="card sec"><div class="sechead"><h2>Por meio de pagamento</h2><span class="label">gastos</span></div>
+  return `<section class="card sec"><div class="sechead"><h2>Por meio de pagamento</h2><span class="label">saídas</span></div>
     <div class="bars">${rows.map(([k,v])=>`<div class="bar"><div class="t"><span>${esc(k? meioNome(k) : "Não informado")}</span><span><b>${fmt(v)}</b> <span style="color:var(--muted)">${(v/tot*100).toFixed(0)}%</span></span></div><div class="track"><div class="fill" style="width:${(v/max*100).toFixed(1)}%;background:${k?"var(--accent)":"var(--line)"}"></div></div></div>`).join("")}</div>
   </section>`;
 }
@@ -1275,7 +1275,7 @@ function renderSelBar(){
   const n=state.sel.size, vis=visiveisLanc().filter(i=>!i.isFatura), todos=vis.length && vis.every(i=>state.sel.has(i.id));
   const sel=state.items.filter(i=>state.sel.has(i.id));
   bar.innerHTML=`<div class="selbar" role="region" aria-label="Lançamentos selecionados"><div class="wrap selin">
-    <div class="selinfo"><b>${n? `${n} ${n===1?"selecionado":"selecionados"}` : "Toque nos lançamentos para selecionar"}</b>${n?`<span class="hint">${fmt(somar(sel,"receita"))} em entradas · ${fmt(somar(sel,"despesa"))} em gastos</span>`:""}
+    <div class="selinfo"><b>${n? `${n} ${n===1?"selecionado":"selecionados"}` : "Toque nos lançamentos para selecionar"}</b>${n?`<span class="hint">${fmt(somar(sel,"receita"))} em entradas · ${fmt(somar(sel,"despesa"))} em saídas</span>`:""}
       ${vis.length?`<button type="button" class="linkbtn" id="selAll">${todos?"Limpar os desta lista":`Selecionar todos desta lista (${vis.length})`}</button>`:""}</div>
     <div class="selacts"><button type="button" class="btn sm" id="selCancel">Cancelar</button><button type="button" class="btn sm" id="selCat" ${n?"":"disabled"}>Categoria</button><button type="button" class="btn sm" id="selMeio" ${n?"":"disabled"}>Pagamento</button><button type="button" class="btn sm" id="selRep" ${n?"":"disabled"}>Replicar</button><button type="button" class="btn sm danger" id="selDel" ${n?"":"disabled"}>Excluir</button></div>
   </div></div>`;
@@ -1303,7 +1303,7 @@ function openCatLote(){
     if(!lista.length) return "";
     const atuais=[...new Set(lista.map(i=>i.categoria))];
     const c=escolha[tipo], d1= tipo==="despesa" && c && catInfo("despesa",c).dia1, mudaData = d1 && lista.some(i=>i.vencimento.slice(8)!=="01");
-    return `<div class="field"><label for="cl_${tipo}">${lista.length} ${tipo==="despesa"?(lista.length===1?"gasto":"gastos"):(lista.length===1?"entrada":"entradas")} → nova categoria</label>
+    return `<div class="field"><label for="cl_${tipo}">${lista.length} ${tipo==="despesa"?(lista.length===1?"saída":"saídas"):(lista.length===1?"entrada":"entradas")} → nova categoria</label>
       <select id="cl_${tipo}" data-cl="${tipo}"><option value="">Manter como está</option>${catsDe(tipo).map(x=>`<option ${x.nome===c?"selected":""}>${esc(x.nome)}</option>`).join("")}</select>
       <span class="hint">Hoje ${lista.length===1?"está em":"estão em"} ${esc(atuais.slice(0,4).join(", "))}${atuais.length>4?` e mais ${atuais.length-4}`:""}.${mudaData?` ${esc(c)} fica sempre no dia 1º: as datas vão para o dia 1º de cada mês.`:""}</span></div>`;
   };
@@ -1311,7 +1311,7 @@ function openCatLote(){
     const total=(escolha.despesa?gastos.filter(i=>i.categoria!==escolha.despesa).length:0)+(escolha.receita?entradas.filter(i=>i.categoria!==escolha.receita).length:0);
     $("sheetRoot").innerHTML=`<div class="sheet-bg" id="sbg"><div class="sheet" role="dialog" aria-labelledby="clT">
       <div class="sechead"><h2 id="clT">Mudar categoria</h2><button type="button" class="iconbtn" id="sx" aria-label="Fechar">✕</button></div>
-      <p class="muted" style="font-size:14px">${itens.length} ${itens.length===1?"lançamento selecionado":"lançamentos selecionados"}.${gastos.length&&entradas.length?" Gastos e entradas têm categorias diferentes, então escolha uma para cada.":""}</p>
+      <p class="muted" style="font-size:14px">${itens.length} ${itens.length===1?"lançamento selecionado":"lançamentos selecionados"}.${gastos.length&&entradas.length?" Saídas e entradas têm categorias diferentes, então escolha uma para cada.":""}</p>
       ${bloco("despesa",gastos)}${bloco("receita",entradas)}
       <div class="err" id="clErr" hidden></div>
       <div class="actions"><button type="button" class="btn primary" id="clGo" ${total?"":"disabled"}>${total? `Mudar ${total} ${total===1?"lançamento":"lançamentos"}` : "Escolha a nova categoria"}</button></div>
@@ -1600,7 +1600,7 @@ function openImport(){
     <p class="muted" style="font-size:14px">Use um arquivo do Excel (.xlsx), do Google Planilhas baixado como .xlsx, ou CSV. A primeira linha precisa ter os títulos das colunas.</p>
     <div class="colsimp">
       <span><b>Data</b> obrigatória</span><span><b>Descrição</b></span><span><b>Valor</b> obrigatório</span>
-      <span><b>Tipo</b> Entrada, Gasto, Aplicação ou Resgate</span><span><b>Categoria</b></span><span><b>Para quem / De quem</b></span><span><b>Pago</b> Sim ou Não</span><span><b>Meio de pagamento</b></span>
+      <span><b>Tipo</b> Entrada, Saída, Aplicação ou Resgate</span><span><b>Categoria</b></span><span><b>Para quem / De quem</b></span><span><b>Pago</b> Sim ou Não</span><span><b>Meio de pagamento</b></span>
     </div>
     <div class="actions">
       <button type="button" class="btn" id="impModelo">Baixar planilha modelo</button>
@@ -1629,10 +1629,10 @@ function mostrarAnalise(){
   const prob=[...err,...dup,...fora].sort((x,y)=>x.linha-y.linha);
   box.innerHTML=`
     <div class="impresumo"><b>${esc(imp.nome)}</b><span>${a.linhas.length} ${a.linhas.length===1?"linha":"linhas"} · <b class="pos">${ok.length} ${ok.length===1?"pronta":"prontas"} para importar</b>${prob.length?` · ${prob.length} ignoradas`:""}</span>
-      ${ok.length?`<span><span class="pos">+ ${fmt(r)}</span> em entradas · <span class="neg">− ${fmt(g)}</span> em gastos</span>`:""}</div>
+      ${ok.length?`<span><span class="pos">+ ${fmt(r)}</span> em entradas · <span class="neg">− ${fmt(g)}</span> em saídas</span>`:""}</div>
     ${a.temTipo? "" : `<div class="field"><label for="impModo">A planilha não tem coluna Tipo. Como ler os valores?</label><select id="impModo">
-      <option value="gastos" ${a.modo==="gastos"?"selected":""}>Todos são gastos</option>
-      <option value="sinal" ${a.modo==="sinal"?"selected":""}>Negativos são gastos, positivos são entradas</option>
+      <option value="gastos" ${a.modo==="gastos"?"selected":""}>Todos são saídas</option>
+      <option value="sinal" ${a.modo==="sinal"?"selected":""}>Negativos são saídas, positivos são entradas</option>
       <option value="entradas" ${a.modo==="entradas"?"selected":""}>Todos são entradas</option></select></div>`}
     ${ok.length? `<div class="label">Prévia</div><div class="list">${ok.slice(0,8).map((x,i)=>rowHTML({...x.item,id:"prev"+i})).join("")}</div>${ok.length>8?`<div class="hint">e mais ${ok.length-8}…</div>`:""}` : ""}
     ${prob.length? `<details class="probs"><summary>${prob.length} ${prob.length===1?"linha ignorada":"linhas ignoradas"}</summary><ul>${prob.slice(0,30).map(x=>`<li>Linha ${x.linha}: ${esc(x.motivo)}</li>`).join("")}${prob.length>30?`<li>e mais ${prob.length-30}…</li>`:""}</ul></details>` : ""}
@@ -1667,8 +1667,8 @@ async function baixarModelo(){
     const ws=X.utils.aoa_to_sheet([
       ["Data","Descrição","Valor","Tipo","Categoria","Meio de pagamento","Para quem / De quem","Pago"],
       ["30/10/2026","Salário",4764.17,"Entrada","Salário","Débito em conta","Empresa","Não"],
-      ["31/10/2026","Mercado",95.33,"Gasto","Mercado","Cartão Inter","Supermercado","Não"],
-      ["01/11/2026","Spotify",40.90,"Gasto","Assinaturas","Cartão Inter","","Sim"]
+      ["31/10/2026","Mercado",95.33,"Saída","Mercado","Cartão Inter","Supermercado","Não"],
+      ["01/11/2026","Spotify",40.90,"Saída","Assinaturas","Cartão Inter","","Sim"]
     ]);
     ws["!cols"]=[{wch:12},{wch:28},{wch:12},{wch:10},{wch:18},{wch:20},{wch:22},{wch:8}];
     const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,ws,"Lançamentos");
@@ -1767,9 +1767,9 @@ async function gerarPDF(ini,fim){
   const r=resumoDe(itens);
   const corpo=[[{content:"Entradas",styles:{fontStyle:"bold"}},{content:money(r.tr),styles:{fontStyle:"bold",textColor:pos}}],
     ...r.R.map(([c,v])=>["    "+c,money(v)]),
-    [{content:"Gastos",styles:{fontStyle:"bold"}},{content:money(-r.gastos),styles:{fontStyle:"bold",textColor:neg}}],
+    [{content:"Saídas",styles:{fontStyle:"bold"}},{content:money(-r.gastos),styles:{fontStyle:"bold",textColor:neg}}],
     ...r.G.map(([c,v])=>["    "+c,money(-v)]),
-    [{content:"Sobra do período (entradas - gastos)",styles:{fontStyle:"bold"}},{content:money(r.tr-r.gastos),styles:{fontStyle:"bold",textColor:(r.tr-r.gastos)<0?neg:pos}}],
+    [{content:"Sobra do período (entradas - saídas)",styles:{fontStyle:"bold"}},{content:money(r.tr-r.gastos),styles:{fontStyle:"bold",textColor:(r.tr-r.gastos)<0?neg:pos}}],
     ["Aplicado em investimentos",money(-r.aplic)],
     ...(r.resg? [["Resgatado de investimentos",money(r.resg)]] : []),
     [{content:"Resultado final do período (no caixa)",styles:{fontStyle:"bold"}},{content:money(r.sobra),styles:{fontStyle:"bold",textColor:r.sobra<0?neg:pos}}]];
@@ -1783,7 +1783,7 @@ async function gerarPDF(ini,fim){
     const meses=[]; let k=ini; while(k<=fim){ meses.push(k); k=addMonths(k,1); }
     doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.text("Mês a mês",M,y);
     doc.autoTable({startY:y+3, margin:{left:M,right:M}, theme:"plain",
-      head:[["Mês","Entradas","Gastos","Investido (líquido)","Sobra"]],
+      head:[["Mês","Entradas","Saídas","Investido (líquido)","Sobra"]],
       body:meses.map(k=>{ const x=resumoDe(itens.filter(i=>ym(i.vencimento)===k)); return [cap(nomeMes(k)),money(x.tr),money(-x.gastos),money(-x.inv),money(x.sobra)]; }),
       styles:{fontSize:9, cellPadding:1.8, textColor:tinta, lineColor:linha, lineWidth:{bottom:0.2}},
       headStyles:{fontStyle:"bold", textColor:cinza, fontSize:8},
