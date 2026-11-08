@@ -448,7 +448,9 @@ function viewInicio(){
   const reservaMes = mes.filter(isInv).reduce((a,i)=>a+sinalRes(i),0);
   const reservaTot = baseReserva() + state.items.filter(i=>isInv(i) && ym(i.vencimento)<=state.month).reduce((a,i)=>a+sinalRes(i),0);
   const previsto = saldo + somar(state.items,"receita",i=>!i.pago && ym(i.vencimento)<=state.month) - somar(state.items,"despesa",i=>!i.pago && ym(dataCaixa(i))<=state.month);
-  const ultimos = lancDoMes(state.month).sort((a,b)=>b.vencimento.localeCompare(a.vencimento)||ordemOf(b)-ordemOf(a)).slice(0,6);
+  // Últimos lançamentos = o que foi lançado por último (ordem de cadastro), não a data do lançamento.
+  const quando = i => { const t=Date.parse(i.criadoEm||""); return !isNaN(t)? t : (typeof i.ordem==="number" && i.ordem>1e12? i.ordem : 0); };
+  const ultimos = doMes(state.month).slice().sort((a,b)=>quando(b)-quando(a)||ordemOf(b)-ordemOf(a)).slice(0,6);
   const temEx = state.items.some(i=>i.exemplo);
   return `${bannerFechar(proximoAFechar())}
   ${temEx && !state.readOnly ? `<div class="banner"><span>Os lançamentos marcados como <b>exemplo</b> mostram como o app funciona. Apague quando for usar com seus dados.</span><button class="btn" id="clearEx">Apagar exemplos</button></div>`:""}
