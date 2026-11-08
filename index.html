@@ -804,6 +804,12 @@ function render(){
   if(focada && $("fBusca")){ const el=$("fBusca"); el.focus(); try{ el.setSelectionRange(pos,pos); }catch(e){} }
 }
 
+// Divide o total da compra em n parcelas; os centavos que sobram vão para a 1ª parcela.
+function valorParcelas(total,n){
+  const t=Math.round((typeof total==="number"? total : parseFloat(String(total||"").replace(/\./g,"").replace(",",".")))*100)||0;
+  const base=Math.floor(t/n), resto=t-base*n;
+  return Array.from({length:n},(_,i)=>(base+(i===0?resto:0))/100);
+}
 /* ---------- atraso ---------- */
 const numBR = v => { const n=parseFloat(String(v||"").replace(/[R$\s]/g,"").replace(/\./g,"").replace(",",".")); return isNaN(n)||n<0? 0 : Math.round(n*100)/100; };
 const totalAtr = d => Math.round(((Number(d.valorOriginal)||0)+(Number(d.juros)||0)+(Number(d.multa)||0))*100)/100;
@@ -866,7 +872,7 @@ function openSheet(it){
         <span class="hint" style="margin-top:-6px">${d.mov==="aplicacao"? "Sai do caixa e vai para as reservas em investimento. Não conta como saída." : "Sai das reservas em investimento e volta para o caixa. Não conta como renda."}</span>` : ""}
       <div class="field"><label for="fDesc">Descrição</label><input id="fDesc" required maxlength="120" value="${esc(d.descricao)}" placeholder="${inv?"Ex.: Tesouro Selic, CDB, reserva de emergência":d.tipo==="receita"?"Ex.: Salário de outubro":"Ex.: Conta de luz"}"></div>
       <div class="grid2">
-        ${atr? `<div class="field"><label for="fVal">Valor original (R$)</label><input id="fVal" inputmode="decimal" value="${String(d.valorOriginal).replace(".",",")}" readonly></div>` : `<div class="field"><label for="fVal">Valor (R$)</label><input id="fVal" inputmode="decimal" value="${d.valor!==""? String(d.valor).replace(".",","):""}" placeholder="0,00"></div>`}
+        ${atr? `<div class="field"><label for="fVal">Valor original (R$)</label><input id="fVal" inputmode="decimal" value="${String(d.valorOriginal).replace(".",",")}" readonly></div>` : `<div class="field"><label for="fVal">${novo&&(d.repetir||1)>1&&!repOn&&!d.mov? "Valor total (R$)" : "Valor (R$)"}</label><input id="fVal" inputmode="decimal" value="${d.valor!==""? String(d.valor).replace(".",","):""}" placeholder="0,00"></div>`}
         <div class="field"><label for="fVenc">Data</label><input id="fVenc" type="date" value="${esc(d.vencimento)}"></div>
       </div>
       ${atr? `<div class="grid2">
@@ -880,7 +886,7 @@ function openSheet(it){
         <div class="field"><label for="fCont">${inv?"Banco ou corretora":d.tipo==="receita"?"De quem":"Para quem"} (opcional)</label><input id="fCont" maxlength="80" value="${esc(d.contato)}"></div>
       </div>
       ${!novo && futMeio.length && (d.meio||"")!==(it.meio||"")? `<label class="check"><input type="checkbox" id="fMeioFut" ${aplicaMeioFut?"checked":""}> Usar ${esc(meioNome(d.meio)||"“Não informado”")} também ${futMeio.length===1?"no próximo lançamento":`nos ${futMeio.length} próximos lançamentos`} ${it.serie?"desta série":"desta compra parcelada"}</label>` : ""}
-      ${novo && !(repOn) && !inv ?`<div class="field"><label for="fRep">Parcelas</label><select id="fRep">${Array.from({length:24},(_,k)=>k+1).map(n=>`<option value="${n}" ${n==d.repetir?"selected":""}>${n===1?"À vista":n+"x"}</option>`).join("")}</select><small style="color:var(--muted);font-size:12.5px">A 1ª parcela fica na data escolhida; as demais, no dia 1º dos meses seguintes.</small></div>`:""}
+      ${novo && !(repOn) && !inv ?`<div class="field"><label for="fRep">Parcelas</label><select id="fRep">${Array.from({length:24},(_,k)=>k+1).map(n=>`<option value="${n}" ${n==d.repetir?"selected":""}>${n===1?"À vista":n+"x"}</option>`).join("")}</select><small style="color:var(--muted);font-size:12.5px" id="fRepHint">${(d.repetir||1)>1? `O valor é o total da compra: ${d.repetir}x de <b>${fmt(valorParcelas(d.valor,d.repetir)[0])}</b>. ` : ""}A 1ª parcela fica na data escolhida; as demais, no dia 1º dos meses seguintes.</small></div>`:""}
       ${novo && d.repetir<=1? `<label class="check"><input type="checkbox" id="fRepOn" ${repOn?"checked":""}> Replicar lançamento</label>
         ${!repOn? "" : `<div class="seg segrep"><button type="button" data-rm="meses" aria-pressed="${modoRep==="meses"}">Por meses</button><button type="button" data-rm="rec" aria-pressed="${modoRep==="rec"}">Recorrente</button></div>
           ${modoRep==="meses"? `<div class="field"><label for="fRepM">Copiar para os próximos</label><select id="fRepM">${Array.from({length:24},(_,k)=>k+1).map(n=>`<option value="${n}" ${n===qtdRep?"selected":""}>${n===1?"1 mês":n+" meses"}</option>`).join("")}</select></div>
@@ -910,6 +916,7 @@ function openSheet(it){
     if($("fRepOn")) $("fRepOn").onchange=e=>{ keep(); repOn=e.target.checked; draw(); };
     document.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ keep(); modoRep=b.dataset.rm; draw(); });
     if($("fRep")) $("fRep").onchange=()=>{ keep(); draw(); };
+    if($("fRepHint") && (d.repetir||1)>1) $("fVal").oninput=()=>{ const v=valorParcelas($("fVal").value,d.repetir); $("fRepHint").querySelector("b").textContent=fmt(v[0]); };
     ["fJuros","fMulta"].forEach(id=>{ if($(id)) $(id).oninput=()=>{ const j=numBR($("fJuros").value), m=numBR($("fMulta").value); $("fTotAtr").querySelector("b").textContent=fmt(totalAtr({...d,juros:j,multa:m})); }; });
     if($("fAtraso")){ let armed=false; $("fAtraso").onclick=async()=>{ if(!armed){ armed=true; $("fAtraso").classList.add("armed"); $("fAtraso").textContent=`Confirmar: passar para ${nomeMesSo(addMonths(ym(it.vencimento),1))}`; return; } $("fAtraso").disabled=true; try{ await marcarAtraso(it); closeSheet(); }catch(e){ showErr(e); $("fAtraso").disabled=false; } }; }
     if($("fRepM")) $("fRepM").onchange=e=>{ keep(); qtdRep=Number(e.target.value); $("repHint").textContent = novo? "Além deste, "+hintRep(d,qtdRep).charAt(0).toLowerCase()+hintRep(d,qtdRep).slice(1) : hintRep(it,qtdRep); };
@@ -954,10 +961,10 @@ function openSheet(it){
           if(rec) await gerarRecorrencias({...doc, id:ref.id});
           else await replicar({...doc, id:ref.id}, qtdRep);
         } else if(novo){
-          const n=d.repetir||1;
+          const n=d.repetir||1, partes=valorParcelas(base.valor,n);
           for(let i=0;i<n;i++){
             const v = i===0? d.vencimento : addMonths(ym(d.vencimento),i)+"-01";
-            await col.add({...base, vencimento:v, pago: i===0?base.pago:false, dataPagamento: i===0?base.dataPagamento:null, descricao: n>1? `${base.descricao} (${pad(i+1)}/${pad(n)})`:base.descricao, criadoEm:new Date().toISOString(), ordem: Date.now()+i});
+            await col.add({...base, valor:partes[i], vencimento:v, pago: i===0?base.pago:false, dataPagamento: i===0?base.dataPagamento:null, descricao: n>1? `${base.descricao} (${pad(i+1)}/${pad(n)})`:base.descricao, criadoEm:new Date().toISOString(), ordem: Date.now()+i});
           }
         } else {
           const serieInfo = it.serie? {serie:it.serie, dia:it.dia||+it.vencimento.slice(8,10), recorrente:!!it.recorrente} : {};
