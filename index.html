@@ -835,9 +835,9 @@ function openAtraso(it){
   $("sheetRoot").innerHTML=`<div class="sheet-bg" id="sbg"><div class="sheet">
     <div class="sechead"><h2>Em atraso</h2><button type="button" class="iconbtn" id="sx" aria-label="Fechar">✕</button></div>
     <p style="margin:0"><b>${esc(it.descricao)}</b> · ${fmt(it.valor)}</p>
-    <p class="muted" style="margin:0;font-size:14px">${it.tipo==="receita"?"Não foi recebido":"Não foi pago"} em ${esc(nomeMesSo(ym(it.vencimento)))} e passou para ${esc(mes)}${novo&&(novo.juros||novo.multa)?`, com ${fmt((novo.juros||0)+(novo.multa||0))} de juros e multa`:""}. Aqui ele fica só como registro e não entra nas contas deste mês.</p>
+    <p class="muted" style="margin:0;font-size:14px">${it.tipo==="receita"?"Não foi recebido":"Não foi pago"} em ${esc(nomeMesSo(ym(it.vencimento)))} e passou para ${esc(mes)}${novo&&(novo.juros||novo.multa)?`, com ${fmt((novo.juros||0)+(novo.multa||0))} de juros e multa`:""}. Aqui ele fica só como registro e não entra nas contas deste mês.${itemFechado(it)&&novo? ` Como ${esc(nomeMesSo(ym(it.vencimento)))} está fechado, para tirar o lançamento de ${esc(mes)} basta excluí-lo lá.` : ""}</p>
     <div class="err" id="aErr" hidden></div>
-    <div class="actions">${novo&&!novo.pago? `<button type="button" class="btn danger" id="aDesf">Desfazer atraso</button>`:""}<button type="button" class="btn primary" id="aVer">Ver em ${esc(mes)}</button></div>
+    <div class="actions">${novo&&!novo.pago&&!itemFechado(it)? `<button type="button" class="btn danger" id="aDesf">Desfazer atraso</button>`:""}<button type="button" class="btn primary" id="aVer">Ver em ${esc(mes)}</button></div>
   </div></div>`;
   $("sx").onclick=closeSheet; $("sbg").onclick=e=>{ if(e.target.id==="sbg") closeSheet(); };
   $("aVer").onclick=()=>{ closeSheet(); state.month=k; state.tab="lanc"; render(); window.scrollTo(0,0); };
@@ -943,7 +943,7 @@ function openSheet(it){
     if($("fMeioFut")) $("fMeioFut").onchange=e=>{ aplicaMeioFut=e.target.checked; };
     $("sx").onclick=closeSheet;
     $("sbg").onclick=e=>{ if(e.target.id==="sbg") closeSheet(); };
-    if($("fDel")){ let armed=false; $("fDel").onclick=async()=>{ if(!armed){armed=true;$("fDel").classList.add("armed");$("fDel").textContent="Toque de novo para excluir";return;} try{ if(it.origemAtraso && state.atrasos.some(a=>a.id===it.origemAtraso)) await colL().doc(it.origemAtraso).update({emAtraso:false, atrasoPara:null}); await colL().doc(it.id).delete(); closeSheet(); toast(it.origemAtraso? "Lançamento excluído. O original voltou para o mês dele." : "Lançamento excluído"); }catch(e){ showErr(e); } }; }
+    if($("fDel")){ let armed=false; $("fDel").onclick=async()=>{ if(!armed){armed=true;$("fDel").classList.add("armed");$("fDel").textContent="Toque de novo para excluir";return;} try{ const orig=it.origemAtraso? state.atrasos.find(a=>a.id===it.origemAtraso) : null, volta=orig && !itemFechado(orig); if(volta) await colL().doc(orig.id).update({emAtraso:false, atrasoPara:null}); await colL().doc(it.id).delete(); closeSheet(); toast(volta? "Lançamento excluído. O original voltou para o mês dele." : "Lançamento excluído"); }catch(e){ showErr(e); } }; }
     $("frm").onsubmit=async e=>{
       e.preventDefault(); keep();
       const valor = parseFloat(String(d.valor).replace(/\./g,"").replace(",","."));
