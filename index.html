@@ -936,14 +936,14 @@ function openSheet(it){
     }; }
     if($("fDelProx")){ let armed=false; $("fDelProx").onclick=async()=>{
       if(!armed){ armed=true; $("fDelProx").classList.add("armed"); $("fDelProx").textContent="Toque de novo para excluir todos"; return; }
-      try{ const fut=proximosDaSerie(it); for(const i of fut) await colL().doc(i.id).delete(); for(const i of daSerie(it).filter(i=>i.vencimento<it.vencimento && i.recorrente)) await colL().doc(i.id).update({recorrente:false}); await colL().doc(it.id).delete(); closeSheet(); toast(`${fut.length+1} lançamentos excluídos`); }catch(e){ showErr(e); }
+      try{ const fut=proximosDaSerie(it); if(it.serie) await marcarFimSerie(it.serie, addMonths(ym(it.vencimento),-1)); for(const i of fut) await colL().doc(i.id).delete(); for(const i of daSerie(it).filter(i=>i.vencimento<it.vencimento && i.recorrente)) await semFalhar(()=>colL().doc(i.id).update({recorrente:false})); await colL().doc(it.id).delete(); closeSheet(); toast(`${fut.length+1} lançamentos excluídos`); }catch(e){ showErr(e); }
     }; }
     $("fCat").onchange=()=>{ keep(); draw(); };
     $("fMeio").onchange=()=>{ keep(); draw(); };
     if($("fMeioFut")) $("fMeioFut").onchange=e=>{ aplicaMeioFut=e.target.checked; };
     $("sx").onclick=closeSheet;
     $("sbg").onclick=e=>{ if(e.target.id==="sbg") closeSheet(); };
-    if($("fDel")){ let armed=false; $("fDel").onclick=async()=>{ if(!armed){armed=true;$("fDel").classList.add("armed");$("fDel").textContent="Toque de novo para excluir";return;} try{ const orig=it.origemAtraso? state.atrasos.find(a=>a.id===it.origemAtraso) : null, volta=orig && !itemFechado(orig); if(volta) await colL().doc(orig.id).update({emAtraso:false, atrasoPara:null}); await colL().doc(it.id).delete(); closeSheet(); toast(volta? "Lançamento excluído. O original voltou para o mês dele." : "Lançamento excluído"); }catch(e){ showErr(e); } }; }
+    if($("fDel")){ let armed=false; $("fDel").onclick=async()=>{ if(!armed){armed=true;$("fDel").classList.add("armed");$("fDel").textContent="Toque de novo para excluir";return;} try{ const orig=it.origemAtraso? state.atrasos.find(a=>a.id===it.origemAtraso) : null, volta=orig && !itemFechado(orig); if(it.serie && it.recorrente) await marcarPulado(it.id); if(volta) await colL().doc(orig.id).update({emAtraso:false, atrasoPara:null}); await colL().doc(it.id).delete(); closeSheet(); toast(volta? "Lançamento excluído. O original voltou para o mês dele." : "Lançamento excluído"); }catch(e){ showErr(e); } }; }
     $("frm").onsubmit=async e=>{
       e.preventDefault(); keep();
       const valor = parseFloat(String(d.valor).replace(/\./g,"").replace(",","."));
@@ -1295,12 +1295,13 @@ async function ajustaSeriesAposExcluir(excluidos){
   const ids=new Set(excluidos.map(i=>i.id)); let paradas=0;
   const series=[...new Set(excluidos.filter(i=>i.serie).map(i=>i.serie))];
   for(const sid of series){
-    const resto=state.items.filter(i=>i.serie===sid && !ids.has(i.id));
-    const tinhaRec=state.items.some(i=>i.serie===sid && i.recorrente);
+    const resto=todosItens().filter(i=>i.serie===sid && !ids.has(i.id));
+    const tinhaRec=todosItens().some(i=>i.serie===sid && i.recorrente);
     if(!tinhaRec || !resto.length) continue;
     const ultExcl=excluidos.filter(i=>i.serie===sid).reduce((a,b)=>a.vencimento>b.vencimento?a:b);
     const ultResto=resto.reduce((a,b)=>a.vencimento>b.vencimento?a:b);
-    if(ultExcl.vencimento>ultResto.vencimento){ for(const i of resto.filter(i=>i.recorrente)) await colL().doc(i.id).update({recorrente:false}); paradas++; }
+    if(ultExcl.vencimento>ultResto.vencimento){ await marcarFimSerie(sid, ym(ultResto.vencimento)); for(const i of resto.filter(i=>i.recorrente)) await semFalhar(()=>colL().doc(i.id).update({recorrente:false})); paradas++; }
+    else for(const i of excluidos.filter(i=>i.serie===sid && i.recorrente)) await marcarPulado(i.id);
   }
   return paradas;
 }
@@ -1402,6 +1403,13 @@ async function replicar(it,meses){
   return n;
 }
 let gerandoRec=false;
+// Onde cada série recorrente termina (cfg.recFim[serie] = último mês) e meses excluídos um a um (cfg.recPular = ids),
+// para o app não recriar o que você apagou — mesmo quando o lançamento anterior está num mês fechado.
+const fimSerie = sid => (state.cfg.recFim||{})[sid] || "";
+const pulado = id => (state.cfg.recPular||[]).includes(id);
+async function marcarFimSerie(sid,k){ if(!sid) return; await salvarCfg({recFim:{...(state.cfg.recFim||{}), [sid]:k}}); }
+async function marcarPulado(id){ if(!id || pulado(id)) return; await salvarCfg({recPular:[...(state.cfg.recPular||[]), id].slice(-300)}); }
+async function semFalhar(fn){ try{ await fn(); }catch(_){ } }
 async function gerarRecorrencias(extra){
   if(gerandoRec || state.readOnly) return 0;
   gerandoRec=true; let n=0;
@@ -1416,7 +1424,8 @@ async function gerarRecorrencias(extra){
       const ult=restam.reduce((a,b)=>a.vencimento>=b.vencimento?a:b);
       if(!ult.recorrente) continue;
       let k=ym(ult.vencimento);
-      while(addMonths(k,1)<=horiz){ k=addMonths(k,1); await colL().doc(idCopia(sid,k)).set(copiaPara(ult,k,true)); n++; }
+      const fim=fimSerie(sid);
+      while(addMonths(k,1)<=horiz){ k=addMonths(k,1); if(fim && k>fim) break; if(pulado(idCopia(sid,k))) continue; await colL().doc(idCopia(sid,k)).set(copiaPara(ult,k,true)); n++; }
     }
   }catch(e){}
   gerandoRec=false; return n;
@@ -1424,13 +1433,15 @@ async function gerarRecorrencias(extra){
 async function tornarRecorrente(it){
   const serie=it.serie||it.id, dia=it.dia||+it.vencimento.slice(8,10);
   await colL().doc(it.id).update({serie, dia, recorrente:true});
+  if(fimSerie(serie)){ const f={...(state.cfg.recFim||{})}; delete f[serie]; await salvarCfg({recFim:f}); }
   return gerarRecorrencias({...it, serie, dia, recorrente:true});
 }
 async function pararRecorrencia(it){
   let n=0;
+  await marcarFimSerie(it.serie, ym(it.vencimento));
   for(const i of [it, ...daSerie(it)]){
     if(i.vencimento>it.vencimento){ await colL().doc(i.id).delete(); n++; }
-    else if(i.recorrente) await colL().doc(i.id).update({recorrente:false});
+    else if(i.recorrente) await semFalhar(()=>colL().doc(i.id).update({recorrente:false}));
   }
   return n;
 }
