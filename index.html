@@ -486,11 +486,11 @@ function viewInicio(){
     <div class="kpi"><span class="label">A pagar no mês</span><b class="neg">${fmt(aPagar)}</b><small>em aberto</small></div>
     <div class="kpi wide"><span class="label">Reservas em investimento</span><b>${fmt(reservaTot)}</b><small>${reservaMes>0? `+ ${fmt(reservaMes)} aplicados neste mês (líquido)` : reservaMes<0? `− ${fmt(-reservaMes)} resgatados neste mês (líquido)` : mes.some(isInv)? "Aplicações e resgates do mês se anulam" : "Nenhuma aplicação ou resgate neste mês · use o tipo Investimento ao lançar"}</small></div>
   </section>
-  ${quadroParcelas(state.month)}
   <section class="card sec">
     <div class="sechead"><h2>Fluxo de caixa</h2><span class="label">6 meses</span></div>
     ${chartFluxo()}
   </section>
+  ${quadroParcelas(state.month)}
   <section class="sec">
     <div class="sechead"><h2>Últimos lançamentos</h2><button class="linkbtn" data-go="lanc">Ver todos</button></div>
     <div class="list">${ultimos.length? ultimos.map(rowHTML).join("") : `<div class="empty">Nenhum lançamento neste mês. Toque em “Novo lançamento” para registrar uma entrada ou uma saída.</div>`}</div>
