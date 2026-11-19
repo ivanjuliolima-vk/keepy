@@ -64,6 +64,10 @@ h2{font-family:var(--display);font-weight:700;font-size:17px;margin:0;text-wrap:
 .kpi.wide{grid-column:1/-1}
 .parctot{display:flex;align-items:baseline;gap:10px;margin:-2px 0 8px}.parctot b{font-size:22px;font-family:var(--display)}.parctot small{color:var(--muted);font-size:13px}.parctot small b{white-space:nowrap;font-size:13px;font-family:inherit;color:var(--ink)}
 .parclist{display:flex;flex-direction:column}
+.parchead{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:0;padding:0;margin:0 0 8px;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.parchead .ph{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.parchead h2{margin:0}
+.parchead .chev{margin-left:10px;flex:none;font-size:24px;line-height:1;color:var(--muted);transition:transform .2s}.parcs.aberta .parchead .chev{transform:rotate(90deg)}
+.parcver{background:none;border:0;border-top:1px solid var(--line);padding:10px 0 0;width:100%;text-align:left;color:var(--accent);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .parcrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%}
 .parcrow .pn{display:flex;flex-direction:column;min-width:0}.parcrow .pn b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.parcrow .pn small{color:var(--muted);font-size:12.5px}
 .parcrow .pv{font-weight:600;white-space:nowrap}
@@ -453,10 +457,12 @@ function quadroParcelas(k){
   // Saldo parcelado: tudo o que ainda falta pagar de parcelas, deste mês em diante.
   const saldoParc=state.items.filter(i=>i.tipo==="despesa" && !isInv(i) && !i.pago && ym(i.vencimento)>=k && RX_PARC.test(i.descricao||"")).reduce((a,i)=>a+i.valor,0);
   const fim = x => { const m=addMonths(ym(x.i.vencimento), x.t-x.n); return x.n===x.t? "última parcela" : "termina em "+shortMonth(m)+(m.slice(0,4)!==k.slice(0,4)? "/"+m.slice(2,4) : ""); };
-  return `<section class="card sec parcs">
-    <div class="sechead"><h2>Compras parceladas</h2><span class="label">${its.length} ${its.length===1?"parcela":"parcelas"} no mês</span></div>
+  const aberta=!!state.parcAberta;
+  return `<section class="card sec parcs${aberta?" aberta":""}">
+    <button type="button" class="parchead" data-parctoggle="1" aria-expanded="${aberta}"><span class="ph"><h2>Compras parceladas</h2><span class="label">${its.length} ${its.length===1?"parcela":"parcelas"} no mês</span></span><span class="chev" aria-hidden="true">›</span></button>
     <div class="parctot"><b class="neg">${fmt(total)}</b><small>Saldo parcelado total: <b>${fmt(saldoParc)}</b></small></div>
-    <div class="parclist">${its.map(x=>`<button type="button" class="parcrow" data-parc="${esc(x.i.id)}"><span class="pn"><b>${esc(x.nome)}</b><small>${x.n}/${x.t} · ${fim(x)}${x.i.meio&&meioNome(x.i.meio)? " · "+esc(meioNome(x.i.meio)) : ""}</small></span><span class="pv">${fmt(x.i.valor)}</span></button>`).join("")}</div>
+    ${aberta? "" : `<button type="button" class="parcver" data-parctoggle="1">Ver as ${its.length} compras</button>`}
+    <div class="parclist"${aberta? "" : " hidden"}>${its.map(x=>`<button type="button" class="parcrow" data-parc="${esc(x.i.id)}"><span class="pn"><b>${esc(x.nome)}</b><small>${x.n}/${x.t} · ${fim(x)}${x.i.meio&&meioNome(x.i.meio)? " · "+esc(meioNome(x.i.meio)) : ""}</small></span><span class="pv">${fmt(x.i.valor)}</span></button>`).join("")}</div>
   </section>`;
 }
 function viewInicio(){
@@ -2084,6 +2090,7 @@ $("main").addEventListener("click",async e=>{
     return;
   }
   const fr=e.target.closest("[data-fatura]"); if(fr && !fr.closest(".sheet")){ const [cid,k]=fr.dataset.fatura.split("|"); state.sel=null; state.tab="cartoes"; state.month=k; state.fAberta=cid; render(); window.scrollTo(0,0); return; }
+  if(e.target.closest("[data-parctoggle]")){ state.parcAberta=!state.parcAberta; render(); return; }
   const pc=e.target.closest("[data-parc]"); if(pc){ const it=state.items.find(i=>i.id===pc.dataset.parc); if(it) openSheet(it); return; }
   const row=e.target.closest(".row"); if(row){
     if(state.sel && state.tab==="lanc"){ const id=row.dataset.id; state.sel.has(id)? state.sel.delete(id) : state.sel.add(id); atualizaSel(); return; }
