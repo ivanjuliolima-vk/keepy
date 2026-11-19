@@ -62,6 +62,11 @@ h2{font-family:var(--display);font-weight:700;font-size:17px;margin:0;text-wrap:
 .kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media(min-width:720px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.kpis.tres{grid-template-columns:repeat(3,minmax(0,1fr))}.kpis.tres .kpi.wide{grid-column:auto}}
 .kpi.wide{grid-column:1/-1}
+.parctot{display:flex;align-items:baseline;gap:10px;margin:-2px 0 8px}.parctot b{font-size:22px;font-family:var(--display)}.parctot small{color:var(--muted);font-size:13px}
+.parclist{display:flex;flex-direction:column}
+.parcrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%}
+.parcrow .pn{display:flex;flex-direction:column;min-width:0}.parcrow .pn b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.parcrow .pn small{color:var(--muted);font-size:12.5px}
+.parcrow .pv{font-weight:600;white-space:nowrap}
 .kpi.wide small{white-space:normal}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:2px;min-width:0}
 .kpi b{font-size:clamp(12px,3.3vw,18px);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
@@ -437,6 +442,21 @@ function doMes(key){ return state.items.filter(it=>ym(it.vencimento)===key); }
 function somar(arr,tipo,fn){ return arr.filter(i=>i.tipo===tipo && (!fn||fn(i))).reduce((a,i)=>a+i.valor,0); }
 
 /* ---------- views ---------- */
+// Compras parceladas do mês: lançamentos cuja descrição termina em (NN/TT), como o Keepy cria ao parcelar.
+const RX_PARC = /^(.*?)\s*\((\d{1,3})\/(\d{1,3})\)\s*$/;
+function quadroParcelas(k){
+  const its = doMes(k).filter(i=>i.tipo==="despesa" && !isInv(i) && RX_PARC.test(i.descricao||""))
+    .map(i=>{ const [,nome,n,t]=i.descricao.match(RX_PARC); return {i, nome, n:+n, t:+t}; })
+    .sort((a,b)=>b.i.valor-a.i.valor);
+  if(!its.length) return "";
+  const total=its.reduce((a,x)=>a+x.i.valor,0), aberto=its.filter(x=>!x.i.pago).reduce((a,x)=>a+x.i.valor,0);
+  const fim = x => { const m=addMonths(ym(x.i.vencimento), x.t-x.n); return x.n===x.t? "última parcela" : "termina em "+shortMonth(m)+(m.slice(0,4)!==k.slice(0,4)? "/"+m.slice(2,4) : ""); };
+  return `<section class="card sec parcs">
+    <div class="sechead"><h2>Compras parceladas</h2><span class="label">${its.length} ${its.length===1?"parcela":"parcelas"} no mês</span></div>
+    <div class="parctot"><b class="neg">${fmt(total)}</b><small>${aberto? `${fmt(aberto)} em aberto` : "tudo pago"}</small></div>
+    <div class="parclist">${its.map(x=>`<button type="button" class="parcrow" data-parc="${esc(x.i.id)}"><span class="pn"><b>${esc(x.nome)}</b><small>${x.n}/${x.t} · ${fim(x)}${x.i.meio&&meioNome(x.i.meio)? " · "+esc(meioNome(x.i.meio)) : ""}</small></span><span class="pv">${fmt(x.i.valor)}</span></button>`).join("")}</div>
+  </section>`;
+}
 function viewInicio(){
   const hoje = todayStr();
   const saldo = saldoRealizadoAte(hoje);
@@ -466,6 +486,7 @@ function viewInicio(){
     <div class="kpi"><span class="label">A pagar no mês</span><b class="neg">${fmt(aPagar)}</b><small>em aberto</small></div>
     <div class="kpi wide"><span class="label">Reservas em investimento</span><b>${fmt(reservaTot)}</b><small>${reservaMes>0? `+ ${fmt(reservaMes)} aplicados neste mês (líquido)` : reservaMes<0? `− ${fmt(-reservaMes)} resgatados neste mês (líquido)` : mes.some(isInv)? "Aplicações e resgates do mês se anulam" : "Nenhuma aplicação ou resgate neste mês · use o tipo Investimento ao lançar"}</small></div>
   </section>
+  ${quadroParcelas(state.month)}
   <section class="card sec">
     <div class="sechead"><h2>Fluxo de caixa</h2><span class="label">6 meses</span></div>
     ${chartFluxo()}
@@ -2061,6 +2082,7 @@ $("main").addEventListener("click",async e=>{
     return;
   }
   const fr=e.target.closest("[data-fatura]"); if(fr && !fr.closest(".sheet")){ const [cid,k]=fr.dataset.fatura.split("|"); state.sel=null; state.tab="cartoes"; state.month=k; state.fAberta=cid; render(); window.scrollTo(0,0); return; }
+  const pc=e.target.closest("[data-parc]"); if(pc){ const it=state.items.find(i=>i.id===pc.dataset.parc); if(it) openSheet(it); return; }
   const row=e.target.closest(".row"); if(row){
     if(state.sel && state.tab==="lanc"){ const id=row.dataset.id; state.sel.has(id)? state.sel.delete(id) : state.sel.add(id); atualizaSel(); return; }
     const it=state.items.find(i=>i.id===row.dataset.id); if(it) openSheet(it); else { const a=state.atrasos.find(i=>i.id===row.dataset.id); if(a) openAtraso(a); } return; }
